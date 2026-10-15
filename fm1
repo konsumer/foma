@@ -1,5 +1,6 @@
 #!/bin/sh
 # foma: everything runs in Docker, nothing else to install.
+#   ./fm1 new NAME make this copy your own firmware (once): ./fm1 new "MY SYNTH" [--repo URL]
 #   ./fm1 dev      build, serve the emulator + installer on http://localhost:8000, rebuild on save
 #   ./fm1 build    build/web (the site) and build/NAME-VERSION.fwsc (the FM-1 package)
 #   ./fm1 fmt      format the code (clang-format, prettier, ruff)
@@ -26,6 +27,11 @@ run() {
 }
 
 case "${1:-build}" in
+  new)
+    shift
+    [ -f tools/new.py ] || { echo "fm1: this project is already yours (tools/new.py is gone)"; exit 1; }
+    run python3 tools/new.py "$@"
+    ;;
   build) run python3 tools/build.py ;;
   dev) PORTS="-p $PORT:$PORT" run python3 tools/build.py --dev "$PORT" ;;
   fmt) run sh -c 'clang-format -i src/*.c platform/*.c platform/*.h && npx -y prettier -w "web/*.{html,js,css}" "*.json" && ruff format tools' ;;

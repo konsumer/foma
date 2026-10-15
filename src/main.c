@@ -2,7 +2,8 @@
  *
  *   keys        4 voices, also sent over USB-MIDI
  *   OCT- OCT+   the octave (kept in flash)
- *   KNOB1       the waveform: sine, triangle, saw, square
+ *   PRESETS     the waveform: sine, triangle, saw, square
+ *   KNOB1..4    a value each, 0..127, on the screen (yours to use)
  *   USB-MIDI    notes in play too
  *
  * What you can call: platform/fm1.h. The rules (no float, keep audio() short): README.md. */
@@ -25,6 +26,7 @@ static struct {
 
 static volatile uint8_t wave;
 static const char *const WAVES[] = {"SINE", "TRIANGLE", "SAW", "SQUARE"};
+static int knob[4] = {64, 64, 64, 64}; /* KNOB1..4: nothing uses them yet */
 
 /* ---- the sound: runs in the audio interrupt. Keep it short: no screen, no flash */
 static int32_t osc(uint32_t ph) {
@@ -100,8 +102,30 @@ static void draw_centered(int y, const char *s, uint16_t color, int font) {
 static void draw_status(void) {
   char s[24] = "OCTAVE ";
   format_int(s + 7, saved.octave);
-  draw_centered(150, WAVES[saved.wave], WHITE, FONT_SMALL);
-  draw_centered(180, s, DIM, FONT_SMALL);
+  draw_centered(134, WAVES[saved.wave], WHITE, FONT_SMALL);
+  draw_centered(154, s, DIM, FONT_SMALL);
+}
+
+static void draw_knob(int k) { /* four columns of 60 px: the label, the value big */
+  static const char *const NAME[4] = {"KNOB1", "KNOB2", "KNOB3", "KNOB4"};
+  char v[12];
+  int x = k * 60;
+  format_int(v, knob[k]);
+  rect(x, 180, 60, 52, BLACK);
+  text(x + (60 - text_width(NAME[k], FONT_SMALL)) / 2, 180, NAME[k], DIM, FONT_SMALL);
+  text(x + (60 - text_width(v, FONT_BIG)) / 2, 198, v, ACCENT, FONT_BIG);
+}
+
+/* detents turned this pass -> steps: a slow turn is 1 a detent, a fast spin up to 4 */
+static int accel(int e, int32_t detents) {
+  static uint32_t last[ENC_COUNT];
+  uint32_t now = millis(), dt = now - last[e];
+  if (!detents) {
+    return 0;
+  }
+  last[e] = now;
+  return detents * (dt < 25 ? 4 : dt < 60 ? 2
+                                          : 1);
 }
 
 static void draw_keys(uint32_t lit) {
@@ -133,6 +157,9 @@ void setup(void) {
   draw_centered(20, "FOMA", ACCENT, FONT_BIG);
   draw_centered(56, "a synth to start from", DIM, FONT_SMALL);
   draw_status();
+  for (int k = 0; k < 4; k++) {
+    draw_knob(k);
+  }
   print("hello from setup()");
 }
 
@@ -164,7 +191,7 @@ void loop(void) {
   }
 
   int oct = saved.octave + button_pressed(BTN_OCT_UP) - button_pressed(BTN_OCT_DOWN);
-  int w = (saved.wave + encoder(ENC_KNOB1)) & 3;
+  int w = (saved.wave + encoder(ENC_PRESETS)) & 3;
   if ((oct != saved.octave && oct >= -2 && oct <= 2) || w != saved.wave) {
     saved.octave = (int8_t)(oct < -2 ? -2 : oct > 2 ? 2
                                                     : oct);
@@ -172,6 +199,15 @@ void loop(void) {
     draw_status();
     dirty = 1;
     changed_at = millis();
+  }
+  for (int k = 0; k < 4; k++) {
+    int v = knob[k] + accel(ENC_KNOB1 + k, encoder(ENC_KNOB1 + k));
+    v = v < 0 ? 0 : v > 127 ? 127
+                            : v;
+    if (v != knob[k]) {
+      knob[k] = v;
+      draw_knob(k);
+    }
   }
   led_button(BTN_OCT_DOWN, saved.octave < 0);
   led_button(BTN_OCT_UP, saved.octave > 0);

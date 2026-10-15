@@ -214,7 +214,7 @@ for (const k of knobs) {
     (e) => {
       e.preventDefault()
       const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY
-      if (Math.abs(dy) >= 50) return turn(k, dy < 0 ? 1 : -1) // a mouse wheel notch: one detent
+      if (Math.abs(dy) >= 50) return turn(k, Math.sign(-dy) * Math.max(1, Math.round(Math.abs(dy) / 100))) // mouse wheel notches (~100 px each, merged when fast): a detent each
       wheel -= dy // a trackpad: by distance
       const n = Math.trunc(wheel / 25)
       if (n) {

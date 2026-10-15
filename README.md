@@ -97,8 +97,15 @@ The toolchain image has its own workflow, `.github/workflows/toolchain.yml`: whe
 (or when run by hand) it builds the image, checks that it builds the firmware, and pushes it to Docker Hub. It needs the
 repo secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
-**Using this as a template:** your firmware does not need its own toolchain. Delete `Dockerfile` and
-`.github/workflows/toolchain.yml`; `./fm1` and the build workflow use the published `konsumer/foma-toolchain`.
+**Using this as a template:** copy it (GitHub's "Use this template", or clone it), then make it yours once:
+
+```sh
+./fm1 new "MY SYNTH" --identity FM-1_96      # --repo URL too, if there is no git remote "origin" yet
+```
+
+That renames the firmware, points the page's Source link at your repo, writes your README, adds you to
+LICENSING.md, and removes what only foma needs (the `Dockerfile` and its workflow: your project uses the published
+`konsumer/foma-toolchain`).
 
 Pick your own `identity` in `firmware.json` before you share a build: the FM-1 and the installers tell firmwares apart
 by it. Taken so far: `900` SLOOP, `91N` Felucca, `93N` sloopDX, `97N` zp12, `98N` a Doom port, `99N` Dinghy; check the
