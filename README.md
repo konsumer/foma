@@ -1,5 +1,7 @@
 # foma
 
+*F*M-*O*ne *M*akers' *A*ssistant
+
 Write firmware for the M-VAVE FM-1 with nothing installed but Docker. Edit one C file, hear it in the browser emulator
 as you save, install it on the FM-1 from the same page.
 
@@ -74,13 +76,13 @@ The FM-1 runs a JieLi AC791N. The emulator is forgiving, the chip is not; the bu
 
 ## Commands
 
-| | |
-| --- | --- |
-| `./fm1 dev` | build, serve on http://localhost:8000 (`PORT=9000 ./fm1 dev`), rebuild on every save |
-| `./fm1 build` | `build/web/` (the site) and `build/NAME-VERSION.fwsc` (the package) |
-| `./fm1 fmt` | format: clang-format (C), prettier (web), ruff (python) |
-| `./fm1 shell` | a shell in the toolchain container |
-| `./fm1 image` | build the toolchain image from the `Dockerfile` here, instead of pulling it |
+|               |                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `./fm1 dev`   | build, serve on http://localhost:8000 (`PORT=9000 ./fm1 dev`), rebuild on every save |
+| `./fm1 build` | `build/web/` (the site) and `build/NAME-VERSION.fwsc` (the package)                  |
+| `./fm1 fmt`   | format: clang-format (C), prettier (web), ruff (python)                              |
+| `./fm1 shell` | a shell in the toolchain container                                                   |
+| `./fm1 image` | build the toolchain image from the `Dockerfile` here, instead of pulling it          |
 
 Windows: `fm1.cmd dev` (Docker Desktop). Without the script:
 `docker run --rm -it --platform linux/amd64 -p 8000:8000 -v "$PWD:/work" konsumer/foma-toolchain python3 tools/build.py --dev 8000`.
