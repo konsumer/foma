@@ -1,6 +1,6 @@
 # foma
 
-*F*M-*O*ne *M*akers' *A*ssistant
+**F**m-**O**ne **M**akers' **A**ssistant
 
 Write firmware for the M-VAVE FM-1 with nothing installed but Docker. Edit one C file, hear it in the browser emulator
 as you save, install it on the FM-1 from the same page.
