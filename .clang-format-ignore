@@ -1,0 +1,5 @@
+# vendored from Felucca / Dinghy: kept as upstream has it, so changes there merge cleanly
+platform/hal/*
+platform/loader/*
+platform/src/*
+platform/gen/*

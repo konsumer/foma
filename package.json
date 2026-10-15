@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "scripts": {
+    "fmt": "npx -y prettier -w \"web/*.{html,js,css}\" \"*.json\""
+  }
+}

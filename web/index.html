@@ -1,0 +1,131 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FM-1 firmware</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <strong id="fwname">FM-1</strong>
+        <span id="fwver" class="dim"></span>
+      </div>
+      <nav>
+        <a href="#emulator" data-tab="emulator">Emulator</a>
+        <a href="#install" data-tab="install">Install</a>
+        <a href="#rescue" data-tab="rescue">Rescue</a>
+      </nav>
+      <button id="buildstate" class="badge" hidden></button>
+    </header>
+
+    <section id="buildlog" class="buildlog" hidden>
+      <div class="buildlog-head">
+        <strong id="buildlog-title">Build failed</strong>
+        <span class="dim">Fix it and save: the page picks up the next build by itself.</span>
+      </div>
+      <pre id="buildlog-text"></pre>
+    </section>
+
+    <main>
+      <!-- ---------------------------------------------------------------- emulator -->
+      <section id="tab-emulator" class="tab">
+        <div class="device" id="device">
+          <canvas id="screen" width="240" height="240"></canvas>
+          <div class="poweron" id="poweron"><button id="power" class="primary">Switch on</button></div>
+        </div>
+        <div class="toolbar">
+          <button id="reset">Restart</button>
+          <button id="wipe">Forget settings</button>
+          <label
+            >MIDI in
+            <select id="midiin">
+              <option value="">none</option>
+            </select></label
+          >
+          <label
+            >MIDI out
+            <select id="midiout">
+              <option value="">none</option>
+            </select></label
+          >
+          <span id="clock" class="dim mono"></span>
+        </div>
+        <pre id="console" class="console" aria-live="polite"></pre>
+      </section>
+
+      <!-- ---------------------------------------------------------------- install -->
+      <section id="tab-install" class="tab" hidden>
+        <h1>Install on the FM-1</h1>
+        <p>Connect the FM-1 directly to this computer with a USB data cable, close other apps that use MIDI, and use Chrome or Edge. Do not unplug it while writing. Installing firmware is at your own risk.</p>
+        <div class="card">
+          <h2>This project</h2>
+          <p id="pkginfo" class="dim">No package built yet.</p>
+          <button id="install" class="primary" disabled>Install</button>
+        </div>
+        <div class="card">
+          <h2>Another firmware file</h2>
+          <p class="dim">Any FM-1 package (<code>.fwsc</code>) from this family: Felucca, SLOOP, Dinghy, X0X, ...</p>
+          <input type="file" id="otherfile" accept=".fwsc" />
+          <p id="otherinfo" class="dim"></p>
+          <button id="installother" disabled>Install this file</button>
+        </div>
+        <div class="card">
+          <h2>What is on the FM-1?</h2>
+          <button id="check">Check</button>
+          <p id="checkinfo" class="dim"></p>
+        </div>
+        <div class="progress" id="progressbox" hidden>
+          <progress id="bar" max="100" value="0"></progress>
+          <p id="status"></p>
+          <details>
+            <summary class="dim">Details</summary>
+            <pre id="log"></pre>
+          </details>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------------- rescue -->
+      <section id="tab-rescue" class="tab" hidden>
+        <h1>Rescue</h1>
+        <div class="card">
+          <h2>It crashes, or does not start</h2>
+          <ol>
+            <li>Switch the FM-1 off. Hold <strong>OCT-</strong> and switch it on. The screen says <em>USB RESCUE</em>: no sound, only the updater.</li>
+            <li>Install a firmware that works from the <a href="#install">Install</a> tab, or the official one below.</li>
+          </ol>
+          <p class="dim">A firmware built here that crashes twice while starting goes to the USB rescue by itself. A crash shows a red screen with the address it happened at (look it up in <code>build/fm1/firmware.dis</code>), then the FM-1 restarts.</p>
+        </div>
+        <div class="card">
+          <h2>An install was cut off</h2>
+          <p>The FM-1 stays in update mode until an install finishes (its screen is dark or says UPDATE). Plug it in and finish the install:</p>
+          <button id="resume">Finish with this project's firmware</button>
+          <button id="resumeother" disabled>Finish with the file chosen in Install</button>
+        </div>
+        <div class="card">
+          <h2>Back to the official firmware</h2>
+          <ol>
+            <li>Download M-VAVE's FM-1 V15: <a href="https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc">FM-1.fwsc</a> (or from <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">m-vave.com/download</a>).</li>
+            <li>Choose it here (it is checked before anything is written): <input type="file" id="stockfile" accept=".fwsc" /></li>
+            <li>Connect the FM-1, normally or in the USB rescue, and press the button.</li>
+          </ol>
+          <button id="installstock" class="primary" disabled>Install the official firmware</button>
+          <p id="stockinfo" class="dim"></p>
+        </div>
+        <div class="card">
+          <h2>Nothing reaches it</h2>
+          <p>When even the USB rescue does not start, the chip's own boot ROM still can update it, but a browser cannot talk to it (it shows up as a USB disk, which browsers may not touch). From a computer:</p>
+          <ul>
+            <li><a href="https://github.com/charlesvestal/fm1-x0x/blob/main/tools/fm1_rescue.sh" target="_blank" rel="noopener">fm1_rescue.sh</a> (macOS): puts the official firmware back through the boot ROM.</li>
+            <li><a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>: the protocol and tools behind it.</li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="dim small">Built on <a href="https://github.com/hugelton/Felucca">Felucca</a> (Leo Kuroshita, Hügelton Instruments), <a href="https://github.com/isod89/sloop-fm1">SLOOP</a> and <a href="https://github.com/zvenson/dinghy">Dinghy</a>. GPL-3.0, no warranty. M-VAVE and FM-1 are trademarks of their owners.</footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
