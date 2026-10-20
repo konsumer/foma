@@ -72,8 +72,9 @@ turning one off takes its code and memory out of the firmware:
 { "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
 ```
 
-In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`) tells you what's in. The FM-1 has no MIDI
-out on the TRS jack, and its Bluetooth radio has no open driver, so neither is an option. The emulator follows MIDI
+In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`) tells you what's in. The FM-1 has no MIDI out on the TRS jack, so that can't be an option. Bluetooth (audio and BLE MIDI) is possible in
+principle: JieLi's AC79 SDK has a Bluetooth stack for this chip, but only as prebuilt libraries that need JieLi's OS
+underneath, so it isn't here (yet). The emulator follows MIDI
 clock from Web MIDI; it has no USB audio input (`audio_in()` gives 0).
 
 ## The rules of the chip
