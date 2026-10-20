@@ -13,6 +13,13 @@ The USB audio from a computer in `platform/src/usb.c` (`FOMA_USB_AUDIO`) is port
 it be used under GPL-3.0; foma's version uses integer math. The TRS MIDI input (`platform/src/midi_uart.c`,
 `platform/hal/fm1_uart.h`) is Felucca's.
 
+`platform/mvave` (the `"mvave"` platform) is from M-VAVE's [fm1_open](https://github.com/m-vave/fm1_open)
+(commit in `platform/mvave/sdk/VERSION`): `board/`, `sdk/include`, `sdk/config` and the boot resources are GPLv3 with
+M-VAVE's FM1 SDK linking exception or Apache-2.0, `sdk/lib/libfm1_engine.a` is M-VAVE's binary SDK under its own
+terms (FM-1 devices only), as `platform/mvave/LICENSE.md` and `platform/mvave/THIRD_PARTY.md` say. `port.c`, `sdk.c`
+and `bridge.h` are foma's; `tools/mvpack.py` is a Python port of fm1_open's `sdk/Package.cs` (MIT, kagaimiq and
+M-VAVE).
+
 ## Third-party material
 
 | What                                                                                      | Licence     | Where                                           |
