@@ -126,7 +126,7 @@ typedef struct {
 void clock_follow(int from);       /* 0: its own tempo; MIDI_USB, MIDI_TRS or MIDI_ANY: the clock coming in */
 void clock_send(int on);           /* 1: send it over USB MIDI */
 void clock_tempo(uint32_t bpm100); /* its own tempo, BPM x 100 (12000: 120 BPM) */
-void clock_start(void);            /* its own start, continue, stop (followed: the other device's) */
+void clock_start(void);            /* start, continue, stop from the app (following: the other device's too) */
 void clock_continue(void);
 void clock_stop(void);
 int clock_events(const clock_event_t **ev); /* audio() only: this block's events; returns how many */
