@@ -4,7 +4,9 @@
  *   OCT- OCT+   the octave (kept in flash)
  *   PRESETS     the waveform: sine, triangle, saw, square
  *   KNOB1..4    a value each, 0..127, on the screen (yours to use)
- *   USB-MIDI    notes in play too
+ *   USB-MIDI    notes in play too (and the TRS jack's)
+ *   PLAY        starts / stops a 120 BPM MIDI clock, sent over USB-MIDI; its light blinks on the beat
+ *   USB audio   a computer playing to the FM-1 comes out of it
  *
  * What you can call: platform/fm1.h. The rules (no float, keep audio() short): README.md. */
 #include "fm1.h"
@@ -42,7 +44,30 @@ static int32_t osc(uint32_t ph) {
   }
 }
 
+static volatile uint8_t beat; /* written by audio(): the clock's beat is on */
+
 void audio(int32_t *out, uint32_t frames) {
+#if FOMA_MIDI_CLOCK
+  static uint8_t tick, running;
+  const clock_event_t *ev;
+  for (int n = clock_events(&ev), i = 0; i < n; i++) { /* 24 ticks a beat: the light is on for the first 6 */
+    if (ev[i].what == CLOCK_START) {
+      running = 1, tick = 0;
+    } else if (ev[i].what == CLOCK_STOP) {
+      running = 0;
+    } else if (ev[i].what == CLOCK_TICK && running) {
+      beat = tick < 6;
+      tick = (uint8_t)((tick + 1) % 24);
+    }
+  }
+  beat &= running;
+#endif
+#if FOMA_USB_AUDIO
+  const int32_t *in = audio_in(); /* the computer's sound, as it comes */
+  for (uint32_t i = 0; in && i < 2 * frames; i++) {
+    out[i] += in[i];
+  }
+#endif
   for (int v = 0; v < VOICES; v++) {
     int32_t amp = voice[v].amp, gate = voice[v].gate;
     uint32_t ph = voice[v].phase, inc = voice[v].inc;
@@ -160,6 +185,10 @@ void setup(void) {
   for (int k = 0; k < 4; k++) {
     draw_knob(k);
   }
+#if FOMA_MIDI_CLOCK
+  clock_tempo(12000);
+  clock_send(1);
+#endif
   print("hello from setup()");
 }
 
@@ -209,6 +238,14 @@ void loop(void) {
       draw_knob(k);
     }
   }
+#if FOMA_MIDI_CLOCK
+  static uint8_t playing;
+  if (button_pressed(BTN_PLAY)) {
+    playing = !playing;
+    playing ? clock_start() : clock_stop();
+  }
+  led_button(BTN_PLAY, beat);
+#endif
   led_button(BTN_OCT_DOWN, saved.octave < 0);
   led_button(BTN_OCT_UP, saved.octave > 0);
 

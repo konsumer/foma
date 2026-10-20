@@ -1,5 +1,10 @@
 {
   "name": "FOMA",
   "version": "0.1",
-  "identity": "FM-1_95"
+  "identity": "FM-1_95",
+  "options": {
+    "usb_audio": true,
+    "trs_midi": true,
+    "midi_clock": true
+  }
 }

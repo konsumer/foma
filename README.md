@@ -12,8 +12,8 @@ as you save, install it on the FM-1 from the same page.
 That pulls the toolchain image ([konsumer/foma-toolchain](https://hub.docker.com/r/konsumer/foma-toolchain)) the first time, then builds your firmware and serves a page with:
 
 - **Emulator**: your code, compiled to WebAssembly, on a virtual FM-1 panel: the screen, keys, buttons, knobs, LEDs,
-  sound, MIDI in/out (Web MIDI), settings, `print()` to a console. Save a file and it reloads; a compile error shows on
-  the page.
+  sound, MIDI in/out (Web MIDI), MIDI clock, settings, `print()` to a console. Save a file and it reloads; a compile
+  error shows on the page.
 - **Install**: puts your build (or any FM-1 `.fwsc`) on the FM-1 over USB, from Chrome or Edge.
 - **Rescue**: the USB rescue, finishing a cut-off install, going back to the official firmware.
 
@@ -55,7 +55,26 @@ Everything you can call is in [platform/fm1.h](platform/fm1.h): keys (`key_press
 MIDI (`midi_read`, `midi_send`), `settings_load` / `settings_save`, `millis`, and sound helpers (`sine`, `note_inc`,
 `random32`).
 
-Name, version and package identity: [firmware.json](firmware.json).
+Name, version, package identity and build options: [firmware.json](firmware.json).
+
+### Build options
+
+Some parts of the platform are optional. They're all on unless `"options"` in `firmware.json` turns them off, and
+turning one off takes its code and memory out of the firmware:
+
+| Option       | What it adds                                                                                                                                                                            | Costs      |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM |
+| `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB     |
+| `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM  |
+
+```json
+{ "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
+```
+
+In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`) tells you what's in. The FM-1 has no MIDI
+out on the TRS jack, and its Bluetooth radio has no open driver, so neither is an option. The emulator follows MIDI
+clock from Web MIDI; it has no USB audio input (`audio_in()` gives 0).
 
 ## The rules of the chip
 
@@ -66,7 +85,7 @@ The FM-1 runs a JieLi AC791N. The emulator is forgiving, the chip is not; the bu
 - **No 64-bit division**, no C library (`printf`, `malloc`, `sin`). 64-bit multiplication is fine.
 - **A division by zero does not trap** on the FM-1 (it gives a wrong value); in the emulator it crashes. Test divisors.
 - **`audio()` has 5.8 ms per 256 frames**, less in practice. No screen, no flash, no waiting in it. Share with `loop()`
-  through `volatile` variables, one writer each.
+  through `volatile` variables, one writer each. `midi_send` works from both.
 - **`loop()` should return within a few ms**: the USB, the updater and the watchdog run between passes.
 - **Draw only what changed**: sending a full screen takes ~80 ms.
 - **Save settings when silent**: a flash erase stops the sound for ~50 ms. Never in a loop: flash wears out.
@@ -132,7 +151,8 @@ platform/fm1.h        the API
 platform/fm1.c        the FM-1 side (boot, rescue, updater, USB, panel, screen, audio)
 platform/web.c        the emulator side (the same API, for WebAssembly)
 platform/common.c     shared: drawing, fonts, sound helpers
-platform/hal, src, loader, gen, sdk   the Felucca platform, vendored unchanged
+platform/clock.c      shared: the MIDI clock (midi_clock)
+platform/hal, src, loader, gen, sdk   the Felucca platform, vendored (src/usb.c trimmed to MIDI and usb_audio)
 tools/build.py        the build (in Docker), with the checks
 web/                  the page: emulator, installer, rescue
 ```

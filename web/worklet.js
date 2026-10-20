@@ -51,7 +51,7 @@ class FM1 extends AudioWorkletProcessor {
 
   publish() {
     const ex = this.ex
-    const msg = { type: 'frame', ms: ex.web_now(), keys: ex.web_led_keys() >>> 0, buttons: ex.web_led_buttons() >>> 0 }
+    const msg = { type: 'frame', ms: ex.web_now(), keys: ex.web_led_keys() >>> 0, buttons: ex.web_led_buttons() >>> 0, backlight: ex.web_led_backlight ? ex.web_led_backlight() : 0 }
     const transfer = []
     const gen = ex.web_fb_gen()
     if (gen !== this.sentFb) {

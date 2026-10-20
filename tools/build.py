@@ -79,6 +79,10 @@ def tc_all(*cmds):
     return list(ex.map(lambda c: tc(*c), cmds))
 
 
+# firmware.json "options": the platform's parts you can leave out (all in unless set false), as FOMA_* in fm1.h
+OPTIONS = {"usb_audio": "FOMA_USB_AUDIO", "trs_midi": "FOMA_TRS_MIDI", "midi_clock": "FOMA_MIDI_CLOCK"}
+
+
 def sources():
   return sorted(SRC.glob("**/*.c"))
 
@@ -94,6 +98,11 @@ def config():
   if not re.fullmatch(r"FM-1_\d{3}", c["product"]):
     raise BuildError('firmware.json: "identity" must be FM-1_ and two digits (the third is your minor version)')
   c["file"] = re.sub(r"[^a-z0-9.-]+", "-", c["name"].lower()).strip("-") or "firmware"
+  opts = c.get("options", {})
+  bad = sorted(set(opts) - set(OPTIONS))
+  if bad:
+    raise BuildError(f"firmware.json: unknown option {', '.join(bad)} (there are: {', '.join(OPTIONS)})")
+  c["defines"] = [f"-D{OPTIONS[k]}={int(bool(opts.get(k, True)))}" for k in OPTIONS]
   return c
 
 
@@ -115,6 +124,7 @@ def build_wasm(cfg):
       *INCLUDES,
       f'-DAPP_NAME="{cfg["name"]}"',
       f'-DAPP_VER="{cfg["version"]}"',
+      *cfg["defines"],
       "-Wl,--no-entry",
       "-Wl,-z,stack-size=1048576",
       "-o",
@@ -184,7 +194,7 @@ def build_loader():
 
 def build_app(cfg):
   FW.mkdir(parents=True, exist_ok=True)
-  flags = [*CFLAGS, *INCLUDES, f'-DAPP_NAME="{cfg["name"]}"', f'-DAPP_VER="{cfg["version"]}"', f'-DFELUCCA_ID="{cfg["product"]}"']
+  flags = [*CFLAGS, *INCLUDES, f'-DAPP_NAME="{cfg["name"]}"', f'-DAPP_VER="{cfg["version"]}"', f'-DFELUCCA_ID="{cfg["product"]}"', *cfg["defines"]]
   objs, cmds = [], []
   for s in [PLAT / "crt0.S", PLAT / "hal/fm1_vec.S", PLAT / "hal/fm1_isr.S"]:
     objs.append(FW / (s.stem + ".o"))

@@ -307,6 +307,15 @@ pre {
   background: var(--lit);
   box-shadow: 0 0 1.4cqw var(--lit);
 }
+/* LIGHTS (GLOBAL page): every key and button glows a little */
+.key[data-backlight='1']:not(.lit),
+.btn[data-backlight='1']:not(.lit) {
+  box-shadow: 0 0 0.6cqw color-mix(in srgb, var(--lit) 35%, transparent);
+}
+.key[data-backlight='2']:not(.lit),
+.btn[data-backlight='2']:not(.lit) {
+  box-shadow: 0 0 1cqw color-mix(in srgb, var(--lit) 70%, transparent);
+}
 .key:focus-visible,
 .btn:focus-visible,
 .knob:focus-visible {
