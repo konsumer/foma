@@ -24,6 +24,13 @@ typedef struct { /* as gfx.c */
 #define HALF_FRAMES 256u
 
 static uint32_t now_ms, now_us, fb_gen;
+#if FOMA_MIDI_CLOCK
+#define CLOCK_MUL ((uint64_t)44100u * 4294967296u / 1000000u) /* now_us -> frames */
+#include "clock.c"
+#endif
+#if FOMA_USB_AUDIO
+const int32_t *audio_in(void) { return 0; } /* (the emulator has no audio from a computer yet) */
+#endif
 
 uint32_t millis(void) { return now_ms; }
 uint32_t micros(void) { return now_us; }
@@ -31,7 +38,7 @@ uint32_t micros(void) { return now_us; }
 /* ---- the panel: the page sets what is held; loop() sees it as the FM-1 shows it */
 static uint32_t web_k, web_b, web_master_v = 700;
 static int32_t web_e[ENC_COUNT];
-static uint32_t in_keys, in_kp, in_kr, in_btn, in_bp, in_br, led_k, led_b;
+static uint32_t in_keys, in_kp, in_kr, in_btn, in_bp, in_br, led_k, led_b, led_bg;
 static int32_t in_enc[ENC_COUNT];
 static uint32_t taps_k, taps_b; /* presses shorter than a millisecond still count */
 
@@ -57,6 +64,8 @@ EXPORT(web_led_keys)
 uint32_t web_led_keys(void) { return led_k; }
 EXPORT(web_led_buttons)
 uint32_t web_led_buttons(void) { return led_b; }
+EXPORT(web_led_backlight)
+uint32_t web_led_backlight(void) { return led_bg; }
 
 static void input_snapshot(void) {
   int e;
@@ -92,6 +101,8 @@ void led_button(int b, int on) {
     led_b = on ? led_b | 1u << b : led_b & ~(1u << b);
   }
 }
+void led_backlight(int level) { led_bg = level < 0 ? 0u : level > 2 ? 2u
+                                                                    : (uint32_t)level; }
 
 /* ---- the screen: the page reads fb when fb_gen moves */
 EXPORT(web_fb)
@@ -111,6 +122,12 @@ static void screen_flush(void) {
 static uint32_t mq_in[MQ], mq_out[MQ], mi_w, mi_r, mo_w, mo_r;
 EXPORT(web_midi_in)
 void web_midi_in(uint32_t st, uint32_t d1, uint32_t d2) {
+#if FOMA_MIDI_CLOCK
+  if (st >= 0xF8u) {
+    clock_in(st, MIDI_USB, now_us);
+    return;
+  }
+#endif
   if (mi_w - mi_r < MQ) {
     mq_in[mi_w++ % MQ] = (st & 0xFFu) | (d1 & 0x7Fu) << 8 | (d2 & 0x7Fu) << 16;
   }
@@ -128,7 +145,7 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   *status = (uint8_t)m;
   *d1 = (uint8_t)(m >> 8);
   *d2 = (uint8_t)(m >> 16);
-  return 1;
+  return MIDI_USB; /* (the page's MIDI in stands for USB) */
 }
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
   if (mo_w - mo_r < MQ) {
@@ -137,7 +154,7 @@ void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
 }
 
 /* ---- settings: the page keeps them (localStorage) and gives them back before boot */
-static uint8_t store[256];
+static uint8_t store[SETTINGS_MAX];
 static int32_t store_len = -1;
 static uint32_t store_gen;
 EXPORT(web_store)
@@ -145,7 +162,7 @@ uint8_t *web_store(void) { return store; }
 EXPORT(web_store_len)
 int32_t web_store_len(void) { return store_len; }
 EXPORT(web_store_set_len)
-void web_store_set_len(int32_t n) { store_len = n > 256 ? 256 : n; }
+void web_store_set_len(int32_t n) { store_len = n > (int32_t)SETTINGS_MAX ? (int32_t)SETTINGS_MAX : n; }
 EXPORT(web_store_gen)
 uint32_t web_store_gen(void) { return store_gen; }
 int settings_load(void *p, uint32_t n) {
@@ -208,6 +225,9 @@ static void tick(void) {
     for (i = 0; i < 2u * HALF_FRAMES; i++) {
       blk[i] = 0;
     }
+#if FOMA_MIDI_CLOCK
+    clock_block(HALF_FRAMES, now_us);
+#endif
     audio(blk, HALF_FRAMES);
     for (i = 0; i < HALF_FRAMES; i++) {
       uint32_t r = (ring_w++ % RING) * 2u, c;

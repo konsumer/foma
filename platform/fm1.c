@@ -47,13 +47,21 @@ static volatile uint32_t fm1_ms; /* milliseconds since power-on (TIMER5) */
 #define HALF_FRAMES 256u /* I2S half buffer: 5.8 ms */
 #define HALF_WORDS (HALF_FRAMES * 2u)
 #define FELUCCA_OTA 1
-#define FELUCCA_CDC 0
-#define FELUCCA_UAC 1
+#if FOMA_MIDI_CLOCK
+#define CLOCK_MUL ((uint64_t)44100u * 4294967296u / (1000000u * FM1_TICKS_PER_US)) /* TIMER4 ticks -> frames */
+#include "clock.c"
+#define MIDI_RT(status, source) clock_in(status, source, fm1_ticks()) /* clock and transport: the helper's */
+#endif
 #include "usb.c"
+#if FOMA_TRS_MIDI
+#include "midi_uart.c"
+#endif
 
-/* ---- flash: read anywhere; erase / program only the update's staging area and the settings sector */
+/* ---- flash: read anywhere; erase / program only the update's staging area and the settings sectors
+ * (Felucca's globals, 0xFC000..0xFF000: below them are the update records, above the MAC key) */
 #define SETTINGS_AT 0x000FC000u
-#define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_AT + 0x1000u))
+#define SETTINGS_END 0x000FF000u
+#define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_END))
 #include "fm1_flash.h"
 static uint8_t flash_ok;
 static int st_read(uint32_t off, void *dst, uint32_t n) {
@@ -135,49 +143,56 @@ static void screen_flush(void) {
   fb_y1 = 0;
 }
 
-/* ---- settings: [magic][length][crc32] then the bytes, in one 4 KiB sector */
+/* ---- settings: [magic][length][crc32] then the bytes, across up to three 4 KiB sectors */
 #define SETTINGS_MAGIC 0x414D4F46u /* "FOMA" */
-static uint32_t crc32(const uint8_t *p, uint32_t n) {
-  uint32_t c = 0xFFFFFFFFu, k;
+_Static_assert(SETTINGS_MAX + 12u <= SETTINGS_END - SETTINGS_AT, "the settings must fit their sectors");
+static uint32_t crc32(uint32_t c, const uint8_t *p, uint32_t n) {
+  uint32_t k;
   while (n--) {
     c ^= *p++;
     for (k = 0; k < 8u; k++) {
       c = c & 1u ? (c >> 1) ^ 0xEDB88320u : c >> 1;
     }
   }
-  return ~c;
+  return c;
 }
 int settings_load(void *p, uint32_t n) {
-  static uint8_t buf[256];
-  uint32_t h[3];
-  if (!flash_ok || n > sizeof buf || st_read(SETTINGS_AT, h, sizeof h) || h[0] != SETTINGS_MAGIC || h[1] != n) {
+  uint8_t buf[256]; /* the flash driver wants RAM */
+  uint32_t h[3], c = 0xFFFFFFFFu;
+  if (!flash_ok || n > SETTINGS_MAX || st_read(SETTINGS_AT, h, sizeof h) || h[0] != SETTINGS_MAGIC || h[1] != n) {
     return -1;
   }
-  if (st_read(SETTINGS_AT + sizeof h, buf, n) || crc32(buf, n) != h[2]) {
+  for (uint32_t at = 0; at < n; at += sizeof buf) { /* check it all before p is touched */
+    uint32_t k = n - at < sizeof buf ? n - at : sizeof buf;
+    if (st_read(SETTINGS_AT + sizeof h + at, buf, k)) {
+      return -1;
+    }
+    c = crc32(c, buf, k);
+  }
+  if (~c != h[2]) {
     return -1;
   }
-  memcpy(p, buf, n);
-  return 0;
+  return st_read(SETTINGS_AT + sizeof h, p, n) ? -1 : 0;
 }
-int settings_save(const void *p, uint32_t n) {
-  static uint8_t buf[256]; /* the flash driver wants RAM */
+int settings_save(const void *p, uint32_t n) { /* p is in RAM (the flash driver wants it) */
   uint32_t h[3] = {SETTINGS_MAGIC, n, 0}, took;
   int rc;
-  if (!flash_ok || n > sizeof buf) {
+  if (!flash_ok || n > SETTINGS_MAX) {
     return -1;
   }
-  memcpy(buf, p, n);
-  h[2] = crc32(buf, n);
-  if ((rc = fl_erase4k(SETTINGS_AT, &took)) != 0) {
-    return rc;
+  h[2] = ~crc32(0xFFFFFFFFu, p, n);
+  for (uint32_t at = SETTINGS_AT; at < SETTINGS_AT + sizeof h + n; at += 0x1000u) { /* only the sectors it needs */
+    if ((rc = fl_erase4k(at, &took)) != 0) {
+      return rc;
+    }
   }
-  if ((rc = fl_write(SETTINGS_AT + sizeof h, buf, n)) != 0) {
+  if ((rc = fl_write(SETTINGS_AT + sizeof h, p, n)) != 0) {
     return rc;
   }
   return fl_write(SETTINGS_AT, (const uint8_t *)h, sizeof h); /* the header last: a cut save stays invalid */
 }
 
-/* ---- MIDI over USB: 4-byte USB-MIDI packets, cable 0 */
+/* ---- MIDI in from USB (cable 0) and the TRS jack (cable 1); out over USB, from loop() or audio() */
 int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   uint32_t pk;
   if (mi_r == mi_w) {
@@ -188,11 +203,12 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   *status = (uint8_t)(pk >> 8);
   *d1 = (uint8_t)(pk >> 16);
   *d2 = (uint8_t)(pk >> 24);
-  return 1;
+  return pk & 0x10u ? MIDI_TRS : MIDI_USB;
 }
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
-  uint32_t st = status;
+  uint32_t st = status, f = irq_save(); /* (loop() and audio() may both send) */
   midi_out_event((st >> 4) | st << 8 | (uint32_t)(d1 & 0x7Fu) << 16 | (uint32_t)(d2 & 0x7Fu) << 24);
+  irq_restore(f);
 }
 
 /* ---- time */
@@ -234,6 +250,26 @@ void led_button(int b, int on) {
     fm1_led_key((uint32_t)b, on);
   }
 }
+void led_backlight(int level) {
+  static const uint16_t NS[3] = {0, 1000, 4000}; /* the pulse a frame; a lit LED is ~95 us */
+  static int8_t was = -1;
+  level = level < 0 ? 0 : level > 2 ? 2
+                                    : level;
+  if (level == was) {
+    return;
+  }
+  if (was < 0) { /* once: every LED behind a key or button */
+    for (uint32_t p = 0; p < FM1_NCOL; p++) {
+      for (uint32_t r = 1; r < 5u; r++) {
+        if (FM1_KEYMAP[r][p] >= 0) {
+          fm1_led_bg[p] |= (uint8_t)(1u << r);
+        }
+      }
+    }
+  }
+  was = (int8_t)level;
+  fm1_led_bg_ns = NS[level];
+}
 void print(const char *s) { (void)s; }
 
 /* ---- the timer: 10 kHz key scan, milliseconds, USB at 2 kHz. It outranks the audio ISR; nested in a
@@ -256,14 +292,22 @@ void fm1_timer5_irq(void) {
   if (++sub == 10u) {
     sub = 0;
   }
-  if (in_audio) {
+  if (in_audio) { /* (the audio from the host keeps coming, and a clock on the TRS jack keeps its time) */
+#if FOMA_USB_AUDIO
     if (usb_due) {
-      uac_service();
+      uo_service();
     }
+#endif
+#if FOMA_TRS_MIDI
+    uart_midi_poll();
+#endif
     return;
   }
   if (owed) {
     usb_poll();
+#if FOMA_TRS_MIDI
+    uart_midi_poll();
+#endif
   }
   owed = 0;
 }
@@ -272,6 +316,11 @@ extern void isr_timer5(void);
 /* ---- the sound: ALNK0 I2S, two halves; the app renders, MASTER scales, Q15 -> 24 bit (-6 dBFS ceiling) */
 static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
 static volatile int32_t master_q12 = 2048;
+#if FOMA_USB_AUDIO
+static int32_t ain[HALF_WORDS]; /* this block of the host's audio (audio_in) */
+static int ain_on;
+const int32_t *audio_in(void) { return ain_on ? ain : 0; }
+#endif
 
 void fm1_alnk0_irq(void) { /* via isr_alnk0 (hal/fm1_isr.S) */
   uint8_t p;
@@ -280,19 +329,21 @@ void fm1_alnk0_irq(void) { /* via isr_alnk0 (hal/fm1_isr.S) */
   fm1_audio_ack_aux(p);
   if (p & FM1_AUDIO_HALF) {
     int32_t *o = &abuf[fm1_audio_free_half() * HALF_WORDS];
-    uint32_t i, b;
+    uint32_t i;
     for (i = 0; i < HALF_WORDS; i++) {
       o[i] = 0;
     }
-    uac_render_start();
+#if FOMA_USB_AUDIO
+    ain_on = usb_audio_take(ain, HALF_FRAMES);
+#endif
+#if FOMA_MIDI_CLOCK
+    clock_block(HALF_FRAMES, fm1_ticks());
+#endif
     audio(o, HALF_FRAMES);
     for (i = 0; i < HALF_WORDS; i++) {
       int32_t v = (o[i] * master_q12) >> 12;
       o[i] = v > 32767 ? 32767 : v < -32767 ? -32767
                                             : v;
-    }
-    for (b = 0; b < HALF_FRAMES; b += 32u) {
-      uac_tap(o + 2u * b, 32u); /* the computer records what the speaker plays */
     }
     for (i = 0; i < HALF_WORDS; i++) {
       o[i] <<= 7;
@@ -401,6 +452,9 @@ void fm1_cstart(void) {
   fm1_adc_init();
   fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3); /* (abuf is zero: .bss) */
   usb_start();
+#if FOMA_TRS_MIDI
+  uart_midi_init();
+#endif
   fm1_timer5_start(isr_timer5, 4);
   fm1_guard_lock_top();
   fm1_irq_enable_all();

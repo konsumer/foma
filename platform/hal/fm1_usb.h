@@ -12,7 +12,7 @@
  *   EP DMA:                fm1_usb_ep0_buf, fm1_usb_ep_txbuf / _rxbuf,
  *                          fm1_usb_ep0_send / fm1_usb_ep_send (csync first),
  *                          fm1_usb_rx_sync (ssync before reading an RX buffer)
- *   EP4 (own slots): fm1_usb_ep4_txbuf, fm1_usb_ep4_send (csync first);
+ *   EP4 (own slots): fm1_usb_ep4_txbuf, fm1_usb_ep4_send (csync first), fm1_usb_ep4_rxbuf;
  *                          isochronous mode is TXCSR2 bit 6 through the SIE (usb.c)
  *   fm1_usb_ep_enable(m)   CON0 &= ~(m << 19), m = bit per endpoint
  *   fm1_usb_sof_take()     SOF pending -> clear, 1
@@ -98,6 +98,8 @@ FM1_INLINE void fm1_usb_ep_send(uint32_t ep, void *p, uint32_t n)
 /* EP4 IN (the USB audio stream, isochronous): its DMA address and count have their own
  * registers (SDK usb_set_dma_taddr / usb_write_ep_cnt, id 0, ep 4) (after Felucca 1.0) */
 FM1_INLINE void fm1_usb_ep4_txbuf(void *p) { FM1_USB_EP4_TADR = (uint32_t)(uintptr_t)p; }
+/* EP4 OUT (the USB audio output, isochronous): its DMA address (SDK usb_set_dma_raddr, ep 4) (after felucca-bsp) */
+FM1_INLINE void fm1_usb_ep4_rxbuf(void *p) { FM1_USB_EP4_RADR = (uint32_t)(uintptr_t)p; }
 FM1_INLINE void fm1_usb_ep4_send(void *p, uint32_t n)
 {
     __asm__ volatile("csync" ::: "memory");

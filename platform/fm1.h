@@ -11,6 +11,18 @@
 #define FM1_H
 #include <stdint.h>
 
+/* ---- build options: firmware.json "options" turns them on or off (all on unless it says otherwise). What an
+ * option adds is only there when it is on: using it otherwise fails the build */
+#ifndef FOMA_USB_AUDIO
+#define FOMA_USB_AUDIO 1 /* usb_audio: a computer or tablet plays into the FM-1 over USB: audio_in() */
+#endif
+#ifndef FOMA_TRS_MIDI
+#define FOMA_TRS_MIDI 1 /* trs_midi: MIDI in on the 3.5 mm jack too, through midi_read() */
+#endif
+#ifndef FOMA_MIDI_CLOCK
+#define FOMA_MIDI_CLOCK 1 /* midi_clock: one MIDI clock for audio(), its own or followed: clock_*() */
+#endif
+
 void setup(void);
 void loop(void);
 void audio(int32_t *out, uint32_t frames);
@@ -68,6 +80,7 @@ uint32_t master_knob(void); /* the MASTER knob 0..1023; it is also the volume */
 /* ---- LEDs */
 void led_key(int k, int on);
 void led_button(int b, int on);
+void led_backlight(int level); /* every key and button glows dimly: 0 off, 1 low, 2 full */
 
 /* ---- screen: 240 x 240, RGB565. Draw anywhere, any time in loop(); what changed is sent
  * after loop() returns. Sending is ~0.3 ms per row: draw only what changed. */
@@ -87,12 +100,50 @@ int text(int x, int y, const char *s, uint16_t color, int font); /* returns the 
 int text_width(const char *s, int font);
 int text_height(int font);
 
-/* ---- MIDI over USB (any channel; SysEx belongs to the updater) */
-int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2); /* 1: got one */
+/* ---- MIDI in over USB (and the TRS jack: trs_midi), out over USB (any channel; SysEx belongs to the updater).
+ * midi_read gives channel messages, and clock / start / continue / stop (0xF8 0xFA 0xFB 0xFC) unless the clock
+ * helper (midi_clock) takes them. midi_send works from loop() and audio() */
+enum { MIDI_USB = 1,
+       MIDI_TRS = 2,
+       MIDI_ANY = 3 };
+int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2); /* 0: none; else where it came from: MIDI_USB or MIDI_TRS */
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2);
 
-/* ---- settings: up to 256 bytes that survive power-off. Saving stalls the sound for ~50 ms:
+#if FOMA_MIDI_CLOCK
+/* ---- MIDI clock (midi_clock): one clock for the app, 24 ticks a beat. It runs at clock_tempo(), or follows the
+ * clock coming in (clock_follow); either way, in audio(), clock_events() gives this block's ticks and start /
+ * continue / stop, in order, each at the frame it falls on. Count ticks to keep time: a 16th note is 6.
+ * clock_send(1) sends it out over USB MIDI too (a followed clock is passed on). Set it up from loop() */
+enum { CLOCK_TICK = 1,
+       CLOCK_START,
+       CLOCK_CONTINUE,
+       CLOCK_STOP };
+typedef struct {
+  uint16_t at;  /* the frame in this block */
+  uint8_t what; /* CLOCK_* */
+} clock_event_t;
+#define CLOCK_EVENTS 32            /* at most this many a block */
+void clock_follow(int from);       /* 0: its own tempo; MIDI_USB, MIDI_TRS or MIDI_ANY: the clock coming in */
+void clock_send(int on);           /* 1: send it over USB MIDI */
+void clock_tempo(uint32_t bpm100); /* its own tempo, BPM x 100 (12000: 120 BPM) */
+void clock_start(void);            /* start, continue, stop from the app (following: the other device's too) */
+void clock_continue(void);
+void clock_stop(void);
+int clock_events(const clock_event_t **ev); /* audio() only: this block's events; returns how many */
+uint32_t clock_bpm(void);                   /* BPM x 100: its tempo, or the followed clock's (0: none coming) */
+#endif
+
+#if FOMA_USB_AUDIO
+/* ---- audio from a computer or tablet over USB (usb_audio): the FM-1 is a 44.1 kHz stereo output it can pick.
+ * In audio(): this block's frames, L R L R ..., +-32767 (process it, record it, add it to out), or 0 when nothing
+ * plays. The platform doesn't play it itself */
+const int32_t *audio_in(void);
+#endif
+
+/* ---- settings: up to SETTINGS_MAX bytes that survive power-off (three 4 KiB flash sectors, less a header). Saving stalls the sound for
+ * ~50 ms a sector:
  * save when nothing plays, never in a loop (flash wears out) */
+#define SETTINGS_MAX 12276u
 int settings_load(void *p, uint32_t n); /* 0: loaded; else p is untouched */
 int settings_save(const void *p, uint32_t n);
 

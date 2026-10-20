@@ -8,7 +8,6 @@
  * Single compilation unit. */
 #include <stdint.h>
 #define FELUCCA_LOADER 1
-#define FELUCCA_CDC 0
 #define FELUCCA_OTA 1
 #define FELUCCA_OTA_DRYRUN 0
 #define FELUCCA_USB_PID 0x0002

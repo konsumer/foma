@@ -338,6 +338,7 @@ function onFrame(m) {
   if (m.fb) drawScreen(m.fb)
   keys.forEach((el, i) => el.classList.toggle('lit', !!(m.keys & (1 << i))))
   buttons.forEach((el, i) => el.classList.toggle('lit', !!(m.buttons & (1 << i))))
+  for (const el of [...keys, ...buttons]) el.dataset.backlight = m.backlight || 0
   if (m.store) saveStore(m.store)
   if (m.log) for (const l of m.log.replace(/\n$/, '').split('\n')) say(l)
   if (m.midi && midiOut) for (const p of m.midi) midiOut.send(midiBytes(p))
@@ -422,7 +423,7 @@ $('midiin').addEventListener('change', async () => {
   const a = await midiPorts()
   if (midiIn) midiIn.onmidimessage = null
   midiIn = a && a.inputs.get($('midiin').value)
-  if (midiIn) midiIn.onmidimessage = (e) => e.data[0] < 0xf0 && send({ type: 'midi', data: Array.from(e.data) })
+  if (midiIn) midiIn.onmidimessage = (e) => (e.data[0] < 0xf0 || [0xf8, 0xfa, 0xfb, 0xfc].includes(e.data[0])) && send({ type: 'midi', data: Array.from(e.data) })
 })
 $('midiout').addEventListener('change', async () => {
   const a = await midiPorts()
