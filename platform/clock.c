@@ -60,8 +60,15 @@ static void ck_tick(uint32_t at) { /* a followed tick: its length, smoothed (a p
 }
 
 static void clock_block(uint32_t n, uint32_t t) {
-  uint32_t r = ck_r, from = ck_from;
+  uint32_t r = ck_r, from = ck_from, req = ck_req;
   ck_n = 0;
+  ck_req = 0;
+  if (req) { /* the app's own start / continue / stop, first (following too) */
+    ck_add(0, (int)req);
+    if (req != CLOCK_STOP) {
+      ck_next_q8 = 0; /* (its own tempo: a tick on the start) */
+    }
+  }
   if (from) {
     while (r != ck_w) {
       RING_PUBLISH();
@@ -86,16 +93,9 @@ static void clock_block(uint32_t n, uint32_t t) {
     }
     ck_measured = ck_q4 ? 176400000u / ck_q4 : 0; /* 44100 * 60 / 24 * 100, Q4 */
   } else {
-    uint32_t req = ck_req, bpm = ck_bpm100 < 100u ? 100u : ck_bpm100, len = 2822400000u / bpm; /* 44100 * 60 / 24 * 100, Q8 */
-    r = ck_w;                                                                                  /* (what came in is not followed) */
-    ck_req = 0;
+    uint32_t bpm = ck_bpm100 < 100u ? 100u : ck_bpm100, len = 2822400000u / bpm; /* 44100 * 60 / 24 * 100, Q8 */
+    r = ck_w;                                                                    /* (what came in is not followed) */
     ck_on = 0;
-    if (req) {
-      ck_add(0, (int)req);
-      if (req != CLOCK_STOP) {
-        ck_next_q8 = 0; /* a tick on the start */
-      }
-    }
     while ((ck_next_q8 >> 8) < n) {
       ck_add(ck_next_q8 >> 8, CLOCK_TICK);
       ck_next_q8 += len;
