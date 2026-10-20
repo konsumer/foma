@@ -67,15 +67,45 @@ turning one off takes its code and memory out of the firmware:
 | `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM |
 | `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB     |
 | `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM  |
+| `bluetooth`  | Only with `"platform": "mvave"` (below), and on there unless turned off: BLE MIDI in and out, and audio from a phone or computer.                                                       | <1 KiB     |
 
 ```json
 { "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
 ```
 
-In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`) tells you what's in. The FM-1 has no MIDI out on the TRS jack, so that can't be an option. Bluetooth (audio and BLE MIDI) is possible in
-principle: JieLi's AC79 SDK has a Bluetooth stack for this chip, but only as prebuilt libraries that need JieLi's OS
-underneath, so it isn't here (yet). The emulator follows MIDI
-clock from Web MIDI; it has no USB audio input (`audio_in()` gives 0).
+In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`, `FOMA_BLUETOOTH`) tells you what's in. The
+FM-1 has no MIDI out on the TRS jack, so that can't be an option. The emulator follows MIDI clock from Web MIDI; it
+has no USB audio input (`audio_in()` gives 0) and no Bluetooth (the calls answer "not ready").
+
+### Platforms: Felucca's, or M-VAVE's SDK (Bluetooth)
+
+`"platform"` in `firmware.json` picks what runs under your code on the FM-1. Your code and `fm1.h` stay the same.
+
+- **`felucca`** (the default): Felucca's platform, all of it source, with Felucca's flash layout, updater and USB rescue
+  (OCT- at power-on).
+- **`mvave`**: M-VAVE's official FM1 SDK, from [fm1_open](https://github.com/m-vave/fm1_open) (in `platform/mvave`):
+  their binary library runs FreeRTOS, USB, Bluetooth and the flash, and foma runs on top of it. It adds:
+  - **Bluetooth** (the `bluetooth` option): BLE MIDI in and out through `midi_read` (`MIDI_BLE`) and `midi_send`, with
+    the FM-1 as a BLE MIDI device phones and computers connect to, or connecting to a BLE MIDI controller itself
+    (`ble_central`, `ble_scan`, `ble_connect`); and audio from a phone or computer (`bt_audio_in()`). It's off until
+    `bt_enable(BT_MIDI | BT_AUDIO)`; `bt_status()` says what's connected. See `fm1.h`.
+  - **USB audio both ways**: the computer can record what the FM-1 plays.
+
+  The trade-offs:
+  - **Space**: M-VAVE's own instrument is inside the SDK's library and can't be left out, and their layout keeps 524
+    KiB of flash for user data (`settings_load` / `settings_save` use it). That leaves about **46 KiB** of flash for
+    your code and data (the build says how much), and about 160 KiB of RAM (no `POOL`: it's all one RAM).
+  - **Their layout and updater**: switching platform loses saved settings, the package identity is `FM-1_8` and six
+    digits (from the version), and there's no OCT- rescue: M-VAVE's workbench and the chip's boot ROM still are.
+  - **Tested only in an emulator** so far ([fm1-emu](https://github.com/joakimeriksson/fm1-emu), with fixes for this
+    SDK): the screen, keys, knobs, audio and TRS MIDI work there. Bluetooth, USB audio, saved settings and installing
+    haven't been tried on an FM-1 yet.
+  - **License**: `platform/mvave` is M-VAVE's: GPLv3 with their SDK linking exception, the library under their
+    binary terms (FM-1 devices only). See `platform/mvave/LICENSE.md` and `THIRD_PARTY.md`.
+
+```json
+{ "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "platform": "mvave" }
+```
 
 ## The rules of the chip
 
@@ -154,6 +184,7 @@ platform/web.c        the emulator side (the same API, for WebAssembly)
 platform/common.c     shared: drawing, fonts, sound helpers
 platform/clock.c      shared: the MIDI clock (midi_clock)
 platform/hal, src, loader, gen, sdk   the Felucca platform, vendored (src/usb.c trimmed to MIDI and usb_audio)
+platform/mvave        the "mvave" platform: port.c (fm1.h on the SDK), sdk.c, board/ and sdk/ from M-VAVE's fm1_open
 tools/build.py        the build (in Docker), with the checks
 web/                  the page: emulator, installer, rescue
 ```
