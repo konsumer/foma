@@ -31,6 +31,17 @@ static uint32_t now_ms, now_us, fb_gen;
 #if FOMA_USB_AUDIO
 const int32_t *audio_in(void) { return 0; } /* (the emulator has no audio from a computer yet) */
 #endif
+#if FOMA_BLUETOOTH /* (no Bluetooth in the emulator: never ready) */
+int bt_enable(int features) { return (void)features, -3; }
+void bt_status(bt_status_t *s) { *s = (bt_status_t){0}; }
+int ble_central(int on) { return (void)on, -3; }
+int ble_scan(void) { return -3; }
+int ble_device(int i, char name[25], int *rssi) { return (void)i, (void)name, (void)rssi, -1; }
+int ble_connect(int i) { return (void)i, -3; }
+int ble_disconnect(void) { return -3; }
+int ble_forget(void) { return -3; }
+const int32_t *bt_audio_in(void) { return 0; }
+#endif
 
 uint32_t millis(void) { return now_ms; }
 uint32_t micros(void) { return now_us; }

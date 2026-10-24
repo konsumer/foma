@@ -22,6 +22,13 @@
 #ifndef FOMA_MIDI_CLOCK
 #define FOMA_MIDI_CLOCK 1 /* midi_clock: one MIDI clock for audio(), its own or followed: clock_*() */
 #endif
+#ifndef FOMA_BLUETOOTH
+#define FOMA_BLUETOOTH 0 /* bluetooth: BLE MIDI and audio from a phone, bt_*() / ble_*() (the "mvave" platform only) */
+#endif
+/* FOMA_MVAVE: 1 when built on M-VAVE's FM1 SDK ("platform": "mvave" in firmware.json), else Felucca's platform */
+#ifndef FOMA_MVAVE
+#define FOMA_MVAVE 0
+#endif
 
 void setup(void);
 void loop(void);
@@ -100,13 +107,15 @@ int text(int x, int y, const char *s, uint16_t color, int font); /* returns the 
 int text_width(const char *s, int font);
 int text_height(int font);
 
-/* ---- MIDI in over USB (and the TRS jack: trs_midi), out over USB (any channel; SysEx belongs to the updater).
+/* ---- MIDI in over USB (and the TRS jack: trs_midi; BLE: bluetooth), out over USB (and BLE) (any channel; SysEx
+ * belongs to the updater).
  * midi_read gives channel messages, and clock / start / continue / stop (0xF8 0xFA 0xFB 0xFC) unless the clock
  * helper (midi_clock) takes them. midi_send works from loop() and audio() */
 enum { MIDI_USB = 1,
        MIDI_TRS = 2,
-       MIDI_ANY = 3 };
-int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2); /* 0: none; else where it came from: MIDI_USB or MIDI_TRS */
+       MIDI_BLE = 4,
+       MIDI_ANY = 7 };
+int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2); /* 0: none; else where it came from: MIDI_USB, MIDI_TRS, MIDI_BLE */
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2);
 
 #if FOMA_MIDI_CLOCK
@@ -133,6 +142,40 @@ int clock_events(const clock_event_t **ev); /* audio() only: this block's events
 uint32_t clock_bpm(void);                   /* BPM x 100: its tempo, or the followed clock's (0: none coming) */
 #endif
 
+#if FOMA_BLUETOOTH
+/* ---- Bluetooth (bluetooth: the "mvave" platform). Off until bt_enable(). BLE MIDI comes in through midi_read
+ * (MIDI_BLE) and midi_send goes out over it too; a phone or computer can play into the FM-1 (bt_audio_in).
+ * By default phones and computers connect to the FM-1 (it shows up as a BLE MIDI device); ble_central(1)
+ * makes it connect to a BLE MIDI controller instead: ble_scan(), then ble_device() / ble_connect(). From loop();
+ * the calls return 0 when taken, -2 busy (try again), -3 not ready */
+enum { BT_AUDIO = 1,
+       BT_MIDI = 2 };
+enum { BLE_OFF,
+       BLE_IDLE,
+       BLE_ADVERTISING,
+       BLE_SCANNING,
+       BLE_CONNECTING,
+       BLE_DISCOVERING,
+       BLE_CONNECTED,
+       BLE_READY,
+       BLE_DISCONNECTING };
+typedef struct {
+  uint8_t ready;                          /* the stack is up */
+  uint8_t audio_connected, audio_playing; /* a phone or computer, for audio */
+  uint8_t ble_role, ble_state;            /* ble_central's, BLE_* (BLE_READY: MIDI flows) */
+  uint8_t ble_count, ble_error;           /* devices found by ble_scan; the last failure (0 none) */
+} bt_status_t;
+int bt_enable(int features); /* BT_AUDIO | BT_MIDI, 0 off */
+void bt_status(bt_status_t *s);
+int ble_central(int on);                         /* 0: others connect to the FM-1; 1: it connects to a controller */
+int ble_scan(void);                              /* central: 15 s of looking for BLE MIDI devices */
+int ble_device(int i, char name[25], int *rssi); /* 0: device i of the scan */
+int ble_connect(int i);
+int ble_disconnect(void);
+int ble_forget(void);             /* forget the BLE pairings */
+const int32_t *bt_audio_in(void); /* in audio(): this block from Bluetooth (as audio_in), or 0 */
+#endif
+
 #if FOMA_USB_AUDIO
 /* ---- audio from a computer or tablet over USB (usb_audio): the FM-1 is a 44.1 kHz stereo output it can pick.
  * In audio(): this block's frames, L R L R ..., +-32767 (process it, record it, add it to out), or 0 when nothing
@@ -154,9 +197,9 @@ uint32_t random32(void);               /* xorshift */
 void format_int(char *buf, int32_t v); /* decimal, buf of 12 */
 void print(const char *s);             /* to the emulator's console (nothing on the FM-1) */
 
-/* big buffers (delay lines, samples): RAM is 96 KiB, the pool ~200 KiB more
+/* big buffers (delay lines, samples): RAM is 96 KiB, the pool ~200 KiB more ("mvave": one RAM, POOL is ordinary)
  *   static int16_t delay[48000] POOL; */
-#ifdef __wasm__
+#if defined(__wasm__) || FOMA_MVAVE
 #define POOL
 #else
 #define POOL __attribute__((section(".pool")))

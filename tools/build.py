@@ -36,6 +36,7 @@ SITE = OUT / "web"
 sys.path.insert(0, str(ROOT / "tools"))
 import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
+import mvpack  # noqa: E402
 
 TC = Path(os.environ.get("JIELI_TOOLCHAIN", "/opt/jieli/toolchain"))
 APP_XIP = 0x02000120  # app.bin offset 0 in the XIP map; the SPL jumps here
@@ -79,8 +80,13 @@ def tc_all(*cmds):
     return list(ex.map(lambda c: tc(*c), cmds))
 
 
-# firmware.json "options": the platform's parts you can leave out (all in unless set false), as FOMA_* in fm1.h
-OPTIONS = {"usb_audio": "FOMA_USB_AUDIO", "trs_midi": "FOMA_TRS_MIDI", "midi_clock": "FOMA_MIDI_CLOCK"}
+# firmware.json "options": the platform's parts you can leave out (all in unless set false), as FOMA_* in fm1.h.
+# bluetooth needs the "mvave" platform (and is on there unless set false)
+OPTIONS = {"usb_audio": "FOMA_USB_AUDIO", "trs_midi": "FOMA_TRS_MIDI", "midi_clock": "FOMA_MIDI_CLOCK", "bluetooth": "FOMA_BLUETOOTH"}
+# firmware.json "platform": what runs under your code on the FM-1
+#   felucca  Felucca's platform (the default): all source, Felucca's flash layout and updater, the USB rescue
+#   mvave    M-VAVE's FM1 SDK (platform/mvave, its binary library): Bluetooth, M-VAVE's layout and updater
+PLATFORMS = ("felucca", "mvave")
 
 
 def sources():
@@ -94,15 +100,26 @@ def config():
     raise BuildError('firmware.json: "version" must look like 0.1, 1.2.3 or 0.1-beta')
   if not re.fullmatch(r"[A-Z0-9 _.+-]{1,16}", c.get("name", "")):
     raise BuildError('firmware.json: "name" must be 1..16 capitals, digits, spaces or _.+-')
-  c["product"] = c["identity"] + m[2][-1]  # FM-1_95 + the minor version's last digit
-  if not re.fullmatch(r"FM-1_\d{3}", c["product"]):
-    raise BuildError('firmware.json: "identity" must be FM-1_ and two digits (the third is your minor version)')
+  c["platform"] = c.get("platform", "felucca")
+  if c["platform"] not in PLATFORMS:
+    raise BuildError(f'firmware.json: "platform" must be one of {", ".join(PLATFORMS)}')
+  if c["platform"] == "mvave":  # M-VAVE's updater takes FM-1_8 and six digits: the version's major and minor
+    c["product"] = f"FM-1_8{int(m[1]) % 1000:03d}{int(m[2]) % 1000:03d}"
+  else:
+    c["product"] = c["identity"] + m[2][-1]  # FM-1_95 + the minor version's last digit
+    if not re.fullmatch(r"FM-1_\d{3}", c["product"]):
+      raise BuildError('firmware.json: "identity" must be FM-1_ and two digits (the third is your minor version)')
   c["file"] = re.sub(r"[^a-z0-9.-]+", "-", c["name"].lower()).strip("-") or "firmware"
   opts = c.get("options", {})
   bad = sorted(set(opts) - set(OPTIONS))
   if bad:
     raise BuildError(f"firmware.json: unknown option {', '.join(bad)} (there are: {', '.join(OPTIONS)})")
-  c["defines"] = [f"-D{OPTIONS[k]}={int(bool(opts.get(k, True)))}" for k in OPTIONS]
+  mv = c["platform"] == "mvave"
+  c["user_bytes"] = mvpack.USER_SIZE  # M-VAVE's layout (the SDK's flash API takes no other)
+  if opts.get("bluetooth") and not mv:
+    raise BuildError('firmware.json: the "bluetooth" option needs "platform": "mvave"')
+  on = {k: bool(opts.get(k, mv if k == "bluetooth" else True)) for k in OPTIONS}
+  c["defines"] = [f"-D{OPTIONS[k]}={int(on[k])}" for k in OPTIONS] + [f"-DFOMA_MVAVE={int(mv)}"]
   return c
 
 
@@ -318,7 +335,7 @@ MMIO_CAST = re.compile(r"\(\s*(?:const\s+)?volatile\b[^()]*\*\s*\)(?!\s*&)")
 MMIO_ASM = re.compile(r"\b(?:__asm__|asm)\b(?!\s+volatile\s*\(\s*\"\"\s*:::\s*\"memory\"\s*\))")
 
 
-def mmio_check():
+def mmio_check(files=None):
   def strip(s):
     s = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), s, flags=re.S)
     return re.sub(r"//[^\n]*", "", s)
@@ -334,7 +351,8 @@ def mmio_check():
       break
     regs |= more
   errors = []
-  files = [*SRC.glob("**/*.[ch]"), *(PLAT / "src").glob("*.[ch]"), *(PLAT / "loader").glob("*.c"), PLAT / "fm1.c", PLAT / "common.c"]
+  if files is None:
+    files = [*SRC.glob("**/*.[ch]"), *(PLAT / "src").glob("*.[ch]"), *(PLAT / "loader").glob("*.c"), PLAT / "fm1.c", PLAT / "common.c"]
   for f in sorted(files):
     for no, ln in enumerate(strip(f.read_text()).splitlines(), 1):
       where = f"{f.relative_to(ROOT)}:{no}"
@@ -348,7 +366,81 @@ def mmio_check():
   return errors
 
 
+# ---- the app on M-VAVE's FM1 SDK (platform/mvave): its compiler flags, linker script and package (fm1_open's
+# sdk/Build.ps1 and Package.cs). The SDK side (sdk.c, board/) sees the SDK's headers, the foma side (port.c, src/)
+# foma's fm1.h: the two share bridge.h
+
+MV = PLAT / "mvave"
+MV_FLAGS = [
+  "-integrated-as", "-mcpu=r3", "-mfprev1", "-Wuninitialized", "-Wno-invalid-noreturn", "-fno-common", "-fno-lto",
+  "-fallow-pointer-null", "-fprefer-gnu-section", "-femulated-tls", "-Wno-shift-negative-value", "-Wframe-larger-than=2560",
+  "-fms-extensions", "-fno-unwind-tables", "-ffunction-sections", "-fdata-sections", "-mllvm", "-pi32v2-large-program=true",
+  "-D__GCC_PI32V2__", "-O2", "-fwrapv", "-fno-fast-math", "-ffp-contract=off", "-Wall", "-Wno-unused-function",
+]  # fmt: skip
+MV_SDK_INC = [f"-I{rel(MV / d)}" for d in ("sdk/include", "sdk/include/libc", "sdk/config", "board", ".")]
+MV_FOMA_INC = ["-Iplatform", "-Iplatform/src", "-Iplatform/gen", f"-I{rel(MV)}"]
+MV_KEEP = ["connectivity_wl82_bluetooth_start", "audio_app_bluetooth_open", "bt_get_local_name", "bt_get_mac_addr"]
+
+
+def build_mvave(cfg):
+  out = OUT / "mvave"
+  out.mkdir(parents=True, exist_ok=True)
+  common = [*MV_FLAGS, f'-DAPP_NAME="{cfg["name"]}"', f'-DAPP_VER="{cfg["version"]}"', *cfg["defines"]]
+  bid = cfg["product"].encode().ljust(32, b"\0")[:32]
+  (out / "build_identity.c").write_text(
+    '#include "layout.h"\n'
+    f"const struct fm1_firmware_layout fm1_layout = {{{cfg['user_bytes']}U,7U}};\n"
+    f"const unsigned char fm1_build_id[32] = {{{','.join(str(b) for b in bid)}}};\n"
+    f'const unsigned char fm1_update_identity[27] = "{cfg["product"]}";\n'
+  )
+  units = [(s, MV_SDK_INC) for s in (MV / "sdk.c", MV / "board/audio.c", MV / "board/device.c", MV / "board/panel.c", out / "build_identity.c")]
+  units += [(s, MV_FOMA_INC) for s in (MV / "port.c", *sources())]
+  objs, cmds = [], []
+  for i, (s, inc) in enumerate(units):
+    objs.append(out / f"{i}_{s.stem}.o")
+    cmds.append(("cc", *common, *inc, "-c", s, "-o", objs[-1]))
+  tc_all(*cmds)
+  ld = (MV / "sdk/config/linker.ld.in").read_text()
+  ld = ld.replace("@SBC_DECODER@", "sbc_decoder\n").replace("@ACL_TX_EXTRA@", " + 1024").replace("@ACL_RX_EXTRA@", " + 4096")
+  (out / "linker.ld").write_text(ld)
+  elf = out / "firmware.elf"
+  lib = MV / "sdk/lib"
+  try:
+    tc(
+      "ld", "-o", elf, *objs, "--sort-common", "--start-group", "--whole-archive", lib / "libfm1_engine.a", "--no-whole-archive",
+      lib / "libc.a", lib / "libcompiler_rt.a", "--end-group", "--gc-sections", "-T", out / "linker.ld", f"-Map={rel(out / 'firmware.map')}",
+      *[f"--undefined={k}" for k in MV_KEEP],
+    )  # fmt: skip
+  except BuildError as e:
+    raise BuildError(explain_link(str(e))) from None
+  parts = ("text", "data", "ram0_data", "cache_ram_data")
+  for p in parts:
+    (out / f"{p}.bin").unlink(missing_ok=True)
+  tc_all(*[("objcopy", "-O", "binary", "-j", f".{p}", elf, out / f"{p}.bin") for p in parts])
+  app = b"".join((out / f"{p}.bin").read_bytes() for p in parts if (out / f"{p}.bin").exists())
+
+  def size(sect):
+    m = re.search(r"^\s*\d+\s+\." + sect + r"\s+([0-9a-f]+)", tc("objdump", "-h", elf), re.MULTILINE)
+    return int(m.group(1), 16) if m else 0
+
+  try:
+    pkg, rep = mvpack.create(app, str(MV / "sdk/pack"), cfg["product"], cfg["user_bytes"])
+  except ValueError as e:
+    raise BuildError(str(e)) from None
+  ram = size("ram0_data") + size("ram0_bss")
+  notes = [f"M-VAVE SDK: image {len(app) // 1024} of {rep['room'] // 1024} KiB", f"RAM {ram // 1024} of 511 KiB (the rest is the SDK's heap)"]
+  return pkg, notes
+
+
 def build_fm1(cfg):
+  if cfg["platform"] == "mvave":
+    errors = mmio_check([*SRC.glob("**/*.[ch]")])
+    if errors:
+      raise BuildError("the FM-1 build is refused (it could crash or brick the FM-1):\n" + "\n".join("  " + e for e in errors))
+    pkg, notes = build_mvave(cfg)
+    (SITE / "firmware.fwsc").write_bytes(pkg)
+    (OUT / f"{cfg['file']}-{cfg['version']}.fwsc").write_bytes(pkg)
+    return notes
   ota = build_loader()
   img, syms, dis, rt = build_app(cfg)
   errors, notes = check(img, syms, dis, rt)

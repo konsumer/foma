@@ -7,6 +7,7 @@
  *   USB-MIDI    notes in play too (and the TRS jack's)
  *   PLAY        starts / stops a 120 BPM MIDI clock, sent over USB-MIDI; its light blinks on the beat
  *   USB audio   a computer playing to the FM-1 comes out of it
+ *   Bluetooth   ("platform": "mvave") BLE MIDI notes play too, and a phone playing to the FM-1 comes out of it
  *
  * What you can call: platform/fm1.h. The rules (no float, keep audio() short): README.md. */
 #include "fm1.h"
@@ -66,6 +67,12 @@ void audio(int32_t *out, uint32_t frames) {
   const int32_t *in = audio_in(); /* the computer's sound, as it comes */
   for (uint32_t i = 0; in && i < 2 * frames; i++) {
     out[i] += in[i];
+  }
+#endif
+#if FOMA_BLUETOOTH
+  const int32_t *bt = bt_audio_in(); /* a phone's */
+  for (uint32_t i = 0; bt && i < 2 * frames; i++) {
+    out[i] += bt[i];
   }
 #endif
   for (int v = 0; v < VOICES; v++) {
@@ -238,6 +245,12 @@ void loop(void) {
       draw_knob(k);
     }
   }
+#if FOMA_BLUETOOTH
+  static uint8_t bt_on; /* BLE MIDI and audio on (the stack may be busy at first: ask until it takes it) */
+  if (!bt_on && bt_enable(BT_MIDI | BT_AUDIO) == 0) {
+    bt_on = 1;
+  }
+#endif
 #if FOMA_MIDI_CLOCK
   static uint8_t playing;
   if (button_pressed(BTN_PLAY)) {
