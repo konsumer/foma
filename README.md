@@ -80,7 +80,9 @@ has no USB audio input (`audio_in()` gives 0) and no Bluetooth (the calls answer
 ### Bluetooth MIDI
 
 `"options": { "bluetooth": true }` makes the FM-1 a Bluetooth MIDI device that a computer, phone or tablet connects
-to. `bt_enable(BT_MIDI)` (from `loop()`) starts it; until then none of it runs. It shows up as your firmware's name
+to. `bt_enable(BT_MIDI)` (from `loop()`) starts it; until then none of it runs. The first one pauses the sound
+while the radio starts (its start-up has timing a long `audio()` would break), so call it early, from `setup()` or
+the first `loop()`. It shows up as your firmware's name
 and four hex digits (`FOMA FC75`), the same on every boot. MIDI from it comes in through `midi_read` (`MIDI_BLE`),
 clock and start / stop through the clock helper (`clock_follow(MIDI_BLE)`), and `midi_send` goes out over it too.
 `bt_status()` says whether it's advertising, connected or ready for MIDI. Notes held when the link drops get their

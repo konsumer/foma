@@ -20,6 +20,8 @@
  * bt_own.c. The radio's own record (187) is measured at every start (fm1_rf_cal.h) */
 static const struct ble_rf_trims BT_TRIMS = {{0x0B, 0x0B}, {1, 7, 4, 7, 11, 1, 7}, {0}, {0}};
 
+static void bt_audio_hold(int hold); /* fm1.c: the audio stopped (1) or going again (0) */
+
 #define BQ 64u
 static struct {
   uint32_t pkt, t;
@@ -157,7 +159,11 @@ static void bt_start(void) {
   irq_restore(f);
   ble_init(bt_addr, 1);
   fm1_rf_cal_on = 1;
+  fm1_wdt_arm(0x0F); /* (the radio's start-up and calibration take a while) */
+  bt_audio_hold(1);  /* the audio interrupt paused: a long audio() in the start-up's timed sequences hangs it */
   ble_hw_wl82_start(&BT_TRIMS);
+  bt_audio_hold(0);
+  fm1_wdt_arm(0x0D); /* (as fm1_cstart arms it) */
   bt_up = 1;
 }
 

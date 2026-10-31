@@ -367,6 +367,18 @@ void fm1_alnk0_irq(void) { /* via isr_alnk0 (hal/fm1_isr.S) */
   in_audio = 0;
 }
 extern void isr_alnk0(void);
+#if FOMA_BLUETOOTH
+static void bt_audio_hold(int hold) { /* bt.c: around the radio's start-up, a short silence */
+  if (hold) {
+    fm1_audio_stop();
+  } else {
+    for (uint32_t i = 0; i < 2u * HALF_WORDS; i++) {
+      abuf[i] = 0;
+    }
+    fm1_audio_resume();
+  }
+}
+#endif
 
 /* ---- the main loop's duties: watchdog, USB, the installer's update request, the MASTER knob */
 static void platform_poll(void) {
