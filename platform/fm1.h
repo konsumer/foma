@@ -117,6 +117,8 @@ enum { MIDI_USB = 1,
        MIDI_ANY = 7 };
 int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2); /* 0: none; else where it came from: MIDI_USB, MIDI_TRS, MIDI_BLE */
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2);
+void midi_frame(uint32_t at); /* audio() only: the frame of this block the next midi_send calls fall on (Bluetooth
+                               * MIDI stamps them with that time; USB has no time stamps). 0 when audio() starts */
 
 #if FOMA_MIDI_CLOCK
 /* ---- MIDI clock (midi_clock): one clock for the app, 24 ticks a beat. It runs at clock_tempo(), or follows the

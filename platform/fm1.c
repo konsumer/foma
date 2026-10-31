@@ -34,7 +34,9 @@
 #endif
 
 bootguard_t bootguard __attribute__((section(".noinit")));
-static volatile uint32_t fm1_ms; /* milliseconds since power-on (TIMER5) */
+static volatile uint32_t fm1_ms;    /* milliseconds since power-on (TIMER5) */
+static volatile uint32_t fm1_ms_t4; /* TIMER4's count when fm1_ms last stepped */
+static volatile uint8_t in_audio;   /* the audio interrupt is running */
 
 // clang-format off
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
@@ -212,12 +214,21 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   return pk & 0x20u ? MIDI_BLE : pk & 0x10u ? MIDI_TRS
                                             : MIDI_USB; /* the cable: 0 USB, 1 TRS, 2 Bluetooth */
 }
+/* the time of a send, in ms: in audio(), the frame midi_frame named (the block's start + its offset); else now */
+static uint32_t au_ms, au_t4, au_at; /* the block audio() renders: fm1_ms, TIMER4 ticks past it, the frame */
+void midi_frame(uint32_t at) { au_at = at; }
+static uint32_t midi_ms(void) {
+  if (!in_audio) {
+    return fm1_ms;
+  }
+  return au_ms + (au_t4 + au_at * (24000000u / 4410u) / 10u) / (1000u * FM1_TICKS_PER_US); /* 44.1 kHz frames */
+}
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
   uint32_t st = status, f = irq_save(); /* (loop() and audio() may both send) */
   uint32_t pk = (st >> 4) | st << 8 | (uint32_t)(d1 & 0x7Fu) << 16 | (uint32_t)(d2 & 0x7Fu) << 24;
   midi_out_event(pk);
 #if FOMA_BLUETOOTH
-  bt_midi_out(pk);
+  bt_midi_out(pk, midi_ms());
 #endif
   irq_restore(f);
 }
@@ -285,7 +296,6 @@ void print(const char *s) { (void)s; }
 
 /* ---- the timer: 10 kHz key scan, milliseconds, USB at 2 kHz. It outranks the audio ISR; nested in a
  * render it only scans, counts and feeds the USB audio stream */
-static volatile uint8_t in_audio;
 void fm1_timer5_irq(void) {
   static uint32_t sub, owed, last, acc;
   uint32_t t0 = fm1_ticks(), usb_due = sub % 5u == 0u;
@@ -297,6 +307,7 @@ void fm1_timer5_irq(void) {
     acc -= 1000u * FM1_TICKS_PER_US;
     fm1_ms++;
   }
+  fm1_ms_t4 = t0 - acc;
   if (usb_due) {
     owed = 1;
   }
@@ -343,6 +354,13 @@ void fm1_alnk0_irq(void) { /* via isr_alnk0 (hal/fm1_isr.S) */
   fm1_audio_ack_aux(p);
   if (p & FM1_AUDIO_HALF) {
     int32_t *o = &abuf[fm1_audio_free_half() * HALF_WORDS];
+    {
+      uint32_t m, t;
+      do {
+        m = fm1_ms, t = fm1_ms_t4;
+      } while (m != fm1_ms); /* (TIMER5 may step it meanwhile) */
+      au_ms = m, au_t4 = fm1_ticks() - t, au_at = 0;
+    }
     uint32_t i;
     for (i = 0; i < HALF_WORDS; i++) {
       o[i] = 0;
@@ -353,6 +371,7 @@ void fm1_alnk0_irq(void) { /* via isr_alnk0 (hal/fm1_isr.S) */
 #if FOMA_MIDI_CLOCK
     clock_block(HALF_FRAMES, fm1_ticks());
 #endif
+    au_at = 0;
     audio(o, HALF_FRAMES);
     for (i = 0; i < HALF_WORDS; i++) {
       int32_t v = (o[i] * master_q12) >> 12;

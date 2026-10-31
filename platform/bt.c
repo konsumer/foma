@@ -110,10 +110,15 @@ static void bt_poll(void) { /* TIMER5, beside usb_poll */
   was_live = live;
 }
 
-static void bt_midi_out(uint32_t pkt) { /* midi_send, interrupts off */
+static void bt_midi_out(uint32_t pkt, uint32_t ms) { /* midi_send, interrupts off; ms: when it falls (midi_ms) */
+  static uint16_t last;
+  if ((int16_t)((uint16_t)ms - last) < 0) { /* never before the last one: a packet's time stamps only go forward */
+    ms = last;
+  }
+  last = (uint16_t)ms;
   if (bt_live && bo_w - bo_r < BQ) {
     bt_out[bo_w % BQ].pkt = pkt;
-    bt_out[bo_w % BQ].ms = (uint16_t)fm1_ms;
+    bt_out[bo_w % BQ].ms = (uint16_t)ms;
     RING_PUBLISH();
     bo_w++;
   }

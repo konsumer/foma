@@ -127,6 +127,7 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
 /* ---- MIDI out: midi_send (loop() or audio()) queues, the control task sends (the SDK's rule) */
 static uint32_t mo_q[MQ];
 static volatile uint32_t mo_w, mo_r;
+void midi_frame(uint32_t at) { (void)at; } /* (the SDK sends no time stamps) */
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
   uint32_t s = mv_irq_save();
   if (mo_w - mo_r < MQ) {

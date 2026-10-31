@@ -158,6 +158,7 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   *d2 = (uint8_t)(m >> 16);
   return MIDI_USB; /* (the page's MIDI in stands for USB) */
 }
+void midi_frame(uint32_t at) { (void)at; }
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
   if (mo_w - mo_r < MQ) {
     mq_out[mo_w++ % MQ] = status | (uint32_t)(d1 & 0x7Fu) << 8 | (uint32_t)(d2 & 0x7Fu) << 16;
