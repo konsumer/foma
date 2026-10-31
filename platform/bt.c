@@ -7,13 +7,17 @@
  * (IRQ 45 and 29, priority 2: below the audio and TIMER5) and talks to the rest through single-producer rings:
  *   in:  the BLE interrupts write, the TIMER5 tick moves it to the MIDI ring (and the clock) as cable 2;
  *   out: midi_send writes (interrupts off), the BLE interrupts send it.
- * The FM-1 is a BLE MIDI peripheral: a computer or phone connects to it. No pairing (macOS and iOS connect anyway),
- * no central role, no audio. */
+ * The FM-1 is a BLE MIDI peripheral (a computer or phone connects to it), and it can connect to one itself: ble_scan,
+ * ble_device, ble_connect (the central role, at the stack's minimal level: no pairing, so a controller or another
+ * FM-1, not a device that insists on pairing). One link at a time. No pairing as a peripheral either (macOS and
+ * iOS connect anyway), no audio. */
 #ifndef BLE_DEVICE_NAME
 #define BLE_DEVICE_NAME APP_NAME /* advertised as "NAME XXXX", XXXX from this FM-1's address */
 #endif
 #define FELUCCA_BLE_DIAG 0
-#define BLE_CENTRAL 0
+#ifndef BLE_CENTRAL
+#define BLE_CENTRAL 3 /* the central role without pairing (ble_cfg.h) */
+#endif
 #include "ble/ble_stack.c"
 
 /* the SDK board's constant records (crystal load, PA bias; the Wi-Fi rates' gains left as they are): as fm1-base's
@@ -35,6 +39,9 @@ static volatile uint32_t bo_w, bo_r;
 static uint8_t bt_addr[6];
 static volatile uint8_t bt_up, bt_on, bt_live; /* the radio started; switched on; a central listens for MIDI */
 static uint8_t bt_held[16][16];                /* notes a central holds on: ended when the link goes */
+static struct ble_scan_tab bt_scan;            /* the BLE MIDI devices around (ble_scan) */
+static uint32_t bt_scan_end, bt_aged;
+static uint8_t bt_role; /* ble_central */
 
 /* ---- the stack's side: the BLE interrupts */
 BLE_API int ble_app_midi_peek(uint32_t *pkt, uint32_t *t_ms) {
@@ -188,18 +195,107 @@ int bt_enable(int features) {
 }
 
 void bt_status(bt_status_t *s) {
+  uint8_t idx[BLE_SCAN_N], cs = bt_up ? ble_central_state() : BLE_CS_IDLE;
   *s = (bt_status_t){0};
   s->ready = bt_up;
-  s->ble_state = !bt_up || !bt_on ? BLE_OFF : bt_live       ? BLE_READY
-                                          : ble_connected() ? BLE_CONNECTED
-                                                            : BLE_ADVERTISING;
+  s->ble_role = bt_role;
+  s->ble_count = (uint8_t)(bt_up ? ble_scan_list(&bt_scan, idx) : 0u);
+  s->ble_error = bt_up ? ble_central_fail() : 0;
+  s->ble_state = !bt_up || !bt_on                   ? BLE_OFF
+                 : bt_live                          ? BLE_READY
+                 : cs == BLE_CS_CONNECTING          ? BLE_CONNECTING
+                 : cs == BLE_CS_SETUP               ? BLE_DISCOVERING
+                 : ble_connected()                  ? BLE_CONNECTED
+                 : bt_scan_end && ble_ll_scanning() ? BLE_SCANNING
+                                                    : BLE_ADVERTISING;
 }
 
-/* not on this platform: the central role (connecting to a controller) and audio from Bluetooth */
-int ble_central(int on) { return on ? -3 : 0; }
-int ble_scan(void) { return -3; }
-int ble_device(int i, char name[25], int *rssi) { return (void)i, (void)name, (void)rssi, -1; }
-int ble_connect(int i) { return (void)i, -3; }
-int ble_disconnect(void) { return -3; }
-int ble_forget(void) { return -3; }
+/* the main loop (platform_poll): the scan's reports into the list, and its end */
+static void bt_loop(void) {
+  uint8_t pdu[40];
+  uint16_t rssi;
+  uint8_t n;
+  if (!bt_up) {
+    return;
+  }
+  while ((n = ble_ll_scan_take(pdu, &rssi)) != 0) {
+    ble_scan_add(&bt_scan, pdu, n, rssi, fm1_ms);
+  }
+  if (fm1_ms - bt_aged > 1000u) {
+    bt_aged = fm1_ms;
+    ble_scan_age(&bt_scan, fm1_ms);
+  }
+  if (bt_scan_end && (int32_t)(fm1_ms - bt_scan_end) >= 0) {
+    bt_scan_end = 0;
+    fm1_ble_irqs_hold(1);
+    ble_ll_scan(0);
+    fm1_ble_irqs_hold(0);
+  }
+}
+
+/* ---- the central role: the FM-1 connects to a BLE MIDI device (a controller, another FM-1) */
+int ble_central(int on) {
+  bt_role = (uint8_t)(on != 0);
+  if (!on) {
+    ble_disconnect();
+  }
+  return 0;
+}
+int ble_scan(void) {
+  if (!bt_up || !bt_on) {
+    return -3;
+  }
+  ble_scan_clear(&bt_scan);
+  bt_scan_end = (fm1_ms + 15000u) | 1u;
+  fm1_ble_irqs_hold(1);
+  ble_ll_scan(1);
+  fm1_ble_irqs_hold(0);
+  return 0;
+}
+int ble_device(int i, char name[25], int *rssi) {
+  uint8_t idx[BLE_SCAN_N];
+  uint32_t n = bt_up ? ble_scan_list(&bt_scan, idx) : 0u, k;
+  if (i < 0 || (uint32_t)i >= n) {
+    return -1;
+  }
+  const struct ble_found *e = &bt_scan.e[idx[i]];
+  for (k = 0; k < 24u && e->name[k]; k++) {
+    name[k] = e->name[k];
+  }
+  name[k] = 0;
+  if (rssi) { /* (no gain table: the list's three bars as a rough dBm) */
+    *rssi = -100 + 20 * (int)ble_scan_bars(&bt_scan, idx[i]);
+  }
+  return 0;
+}
+int ble_connect(int i) {
+  uint8_t idx[BLE_SCAN_N];
+  uint32_t n = bt_up && bt_on ? ble_scan_list(&bt_scan, idx) : 0u;
+  struct ble_peer p;
+  int ok;
+  if (i < 0 || (uint32_t)i >= n) {
+    return -1;
+  }
+  ble_zero((uint8_t *)&p, sizeof p);
+  ble_cpy(p.addr, bt_scan.e[idx[i]].addr, 6);
+  p.addr_rand = bt_scan.e[idx[i]].addr_rand;
+  bt_scan_end = 0;
+  fm1_ble_irqs_hold(1);
+  ble_ll_scan(0);
+  ok = ble_central_connect(&p);
+  fm1_ble_irqs_hold(0);
+  return ok ? 0 : -2;
+}
+int ble_disconnect(void) {
+  if (!bt_up) {
+    return -3;
+  }
+  fm1_ble_irqs_hold(1);
+  ble_central_cancel(); /* (a computer connected to us stays) */
+  fm1_ble_irqs_hold(0);
+  return 0;
+}
+int ble_forget(void) { return 0; } /* (no pairings are kept) */
+
+/* not on this platform: audio from Bluetooth */
 const int32_t *bt_audio_in(void) { return 0; }

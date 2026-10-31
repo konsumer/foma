@@ -67,7 +67,7 @@ turning one off takes its code and memory out of the firmware:
 | `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM |
 | `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB     |
 | `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM  |
-| `bluetooth`  | BLE MIDI in and out ([below](#bluetooth-midi)). Off unless turned on; on by default with `"platform": "mvave"`, which also has audio from a phone or computer.                           | 30 KiB code, 6 KiB RAM |
+| `bluetooth`  | BLE MIDI in and out ([below](#bluetooth-midi)). Off unless turned on; on by default with `"platform": "mvave"`, which also has audio from a phone or computer.                           | 37 KiB code, 7 KiB RAM |
 
 ```json
 { "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
@@ -91,9 +91,10 @@ note-offs.
 On Felucca's platform it's Henri David's Bluetooth stack from [Optimist](https://github.com/w0ts/optimist) with the
 radio drivers of [felucca-bsp](https://github.com/hugelton/felucca-bsp) (`platform/ble`, `platform/hal/fm1_ble*.h`,
 `platform/bt.c`): written from the Bluetooth specifications and measurements of the FM-1's radio, no JieLi library.
-It calibrates the radio when it starts, so nothing stored on the FM-1 is needed. It's a peripheral only: no pairing
-(macOS and iOS connect without it), no connecting out to a controller (`ble_central` answers "not ready") and no
-audio. Tested on an FM-1 with a Mac, both ways.
+It calibrates the radio when it starts, so nothing stored on the FM-1 is needed. It can also connect to a Bluetooth
+MIDI device itself (another FM-1, a controller): `ble_scan()` looks for 15 s, `ble_device()` lists what it found
+(name, rough signal), `ble_connect()` connects; one link at a time. There's no pairing (macOS and iOS connect without
+it; a device that insists is left) and no audio. Tested on an FM-1 with a Mac, both ways.
 
 To connect from a Mac: Audio MIDI Setup, Window > Show MIDI Studio, the Bluetooth button, then Connect.
 

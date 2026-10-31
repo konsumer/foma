@@ -146,9 +146,11 @@ uint32_t clock_bpm(void);                   /* BPM x 100: its tempo, or the foll
 
 #if FOMA_BLUETOOTH
 /* ---- Bluetooth (bluetooth). Off until bt_enable(). BLE MIDI comes in through midi_read (MIDI_BLE) and midi_send
- * goes out over it too. Phones and computers connect to the FM-1 (it shows up as a BLE MIDI device). The "mvave"
- * platform also has: a phone or computer playing into the FM-1 (bt_audio_in), and ble_central(1), which makes it
- * connect to a BLE MIDI controller instead: ble_scan(), then ble_device() / ble_connect(). From loop();
+ * goes out over it too. Phones and computers connect to the FM-1 (it shows up as a BLE MIDI device), or it connects to
+ * one itself (a controller, another FM-1): ble_scan() (15 s of looking), then ble_device() / ble_connect(). One link
+ * at a time. On Felucca's platform ble_central only says which you mean (bt_status's ble_role), there's no pairing
+ * as the central (a device that insists is left) and no audio; the "mvave" platform also has a phone or computer
+ * playing into the FM-1 (bt_audio_in), and ble_central(1) there switches to connecting out. From loop();
  * the calls return 0 when taken, -2 busy (try again), -3 not ready */
 enum { BT_AUDIO = 1,
        BT_MIDI = 2 };
