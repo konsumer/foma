@@ -62,6 +62,9 @@ static volatile uint32_t fm1_ms; /* milliseconds since power-on (TIMER5) */
 #define SETTINGS_AT 0x000FC000u
 #define SETTINGS_END 0x000FF000u
 #define FL_RANGE_OK(off, n) (FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_IN(off, n, SETTINGS_AT, SETTINGS_END))
+#if FOMA_BLUETOOTH
+#define FL_UID /* the flash's unique ID: the Bluetooth address */
+#endif
 #include "fm1_flash.h"
 static uint8_t flash_ok;
 static int st_read(uint32_t off, void *dst, uint32_t n) {
@@ -126,6 +129,9 @@ static void ota_commit(const uint8_t *parm) {
   fm1_enter_update(parm);
 }
 #include "recovery.c"
+#if FOMA_BLUETOOTH
+#include "bt.c"
+#endif
 
 /* ---- the screen, the sound helpers (shared with the emulator) */
 #include "common.c"
@@ -203,11 +209,16 @@ int midi_read(uint8_t *status, uint8_t *d1, uint8_t *d2) {
   *status = (uint8_t)(pk >> 8);
   *d1 = (uint8_t)(pk >> 16);
   *d2 = (uint8_t)(pk >> 24);
-  return pk & 0x10u ? MIDI_TRS : MIDI_USB;
+  return pk & 0x20u ? MIDI_BLE : pk & 0x10u ? MIDI_TRS
+                                            : MIDI_USB; /* the cable: 0 USB, 1 TRS, 2 Bluetooth */
 }
 void midi_send(uint8_t status, uint8_t d1, uint8_t d2) {
   uint32_t st = status, f = irq_save(); /* (loop() and audio() may both send) */
-  midi_out_event((st >> 4) | st << 8 | (uint32_t)(d1 & 0x7Fu) << 16 | (uint32_t)(d2 & 0x7Fu) << 24);
+  uint32_t pk = (st >> 4) | st << 8 | (uint32_t)(d1 & 0x7Fu) << 16 | (uint32_t)(d2 & 0x7Fu) << 24;
+  midi_out_event(pk);
+#if FOMA_BLUETOOTH
+  bt_midi_out(pk);
+#endif
   irq_restore(f);
 }
 
@@ -307,6 +318,9 @@ void fm1_timer5_irq(void) {
     usb_poll();
 #if FOMA_TRS_MIDI
     uart_midi_poll();
+#endif
+#if FOMA_BLUETOOTH
+    bt_poll();
 #endif
   }
   owed = 0;

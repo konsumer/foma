@@ -67,7 +67,7 @@ turning one off takes its code and memory out of the firmware:
 | `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM |
 | `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB     |
 | `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM  |
-| `bluetooth`  | Only with `"platform": "mvave"` (below), and on there unless turned off: BLE MIDI in and out, and audio from a phone or computer.                                                       | <1 KiB     |
+| `bluetooth`  | BLE MIDI in and out ([below](#bluetooth-midi)). Off unless turned on; on by default with `"platform": "mvave"`, which also has audio from a phone or computer.                           | 30 KiB code, 6 KiB RAM |
 
 ```json
 { "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
@@ -76,6 +76,24 @@ turning one off takes its code and memory out of the firmware:
 In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`, `FOMA_BLUETOOTH`) tells you what's in. The
 FM-1 has no MIDI out on the TRS jack, so that can't be an option. The emulator follows MIDI clock from Web MIDI; it
 has no USB audio input (`audio_in()` gives 0) and no Bluetooth (the calls answer "not ready").
+
+### Bluetooth MIDI
+
+`"options": { "bluetooth": true }` makes the FM-1 a Bluetooth MIDI device that a computer, phone or tablet connects
+to. `bt_enable(BT_MIDI)` (from `loop()`) starts it; until then none of it runs. It shows up as your firmware's name
+and four hex digits (`FOMA FC75`), the same on every boot. MIDI from it comes in through `midi_read` (`MIDI_BLE`),
+clock and start / stop through the clock helper (`clock_follow(MIDI_BLE)`), and `midi_send` goes out over it too.
+`bt_status()` says whether it's advertising, connected or ready for MIDI. Notes held when the link drops get their
+note-offs.
+
+On Felucca's platform it's Henri David's Bluetooth stack from [Optimist](https://github.com/w0ts/optimist) with the
+radio drivers of [felucca-bsp](https://github.com/hugelton/felucca-bsp) (`platform/ble`, `platform/hal/fm1_ble*.h`,
+`platform/bt.c`): written from the Bluetooth specifications and measurements of the FM-1's radio, no JieLi library.
+It calibrates the radio when it starts, so nothing stored on the FM-1 is needed. It's a peripheral only: no pairing
+(macOS and iOS connect without it), no connecting out to a controller (`ble_central` answers "not ready") and no
+audio. Tested on an FM-1 with a Mac, both ways.
+
+To connect from a Mac: Audio MIDI Setup, Window > Show MIDI Studio, the Bluetooth button, then Connect.
 
 ### Platforms: Felucca's, or M-VAVE's SDK (Bluetooth)
 

@@ -23,7 +23,7 @@
 #define FOMA_MIDI_CLOCK 1 /* midi_clock: one MIDI clock for audio(), its own or followed: clock_*() */
 #endif
 #ifndef FOMA_BLUETOOTH
-#define FOMA_BLUETOOTH 0 /* bluetooth: BLE MIDI and audio from a phone, bt_*() / ble_*() (the "mvave" platform only) */
+#define FOMA_BLUETOOTH 0 /* bluetooth: BLE MIDI, bt_*() / ble_*() (and audio from a phone: the "mvave" platform) */
 #endif
 /* FOMA_MVAVE: 1 when built on M-VAVE's FM1 SDK ("platform": "mvave" in firmware.json), else Felucca's platform */
 #ifndef FOMA_MVAVE
@@ -143,10 +143,10 @@ uint32_t clock_bpm(void);                   /* BPM x 100: its tempo, or the foll
 #endif
 
 #if FOMA_BLUETOOTH
-/* ---- Bluetooth (bluetooth: the "mvave" platform). Off until bt_enable(). BLE MIDI comes in through midi_read
- * (MIDI_BLE) and midi_send goes out over it too; a phone or computer can play into the FM-1 (bt_audio_in).
- * By default phones and computers connect to the FM-1 (it shows up as a BLE MIDI device); ble_central(1)
- * makes it connect to a BLE MIDI controller instead: ble_scan(), then ble_device() / ble_connect(). From loop();
+/* ---- Bluetooth (bluetooth). Off until bt_enable(). BLE MIDI comes in through midi_read (MIDI_BLE) and midi_send
+ * goes out over it too. Phones and computers connect to the FM-1 (it shows up as a BLE MIDI device). The "mvave"
+ * platform also has: a phone or computer playing into the FM-1 (bt_audio_in), and ble_central(1), which makes it
+ * connect to a BLE MIDI controller instead: ble_scan(), then ble_device() / ble_connect(). From loop();
  * the calls return 0 when taken, -2 busy (try again), -3 not ready */
 enum { BT_AUDIO = 1,
        BT_MIDI = 2 };

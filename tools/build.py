@@ -81,7 +81,7 @@ def tc_all(*cmds):
 
 
 # firmware.json "options": the platform's parts you can leave out (all in unless set false), as FOMA_* in fm1.h.
-# bluetooth needs the "mvave" platform (and is on there unless set false)
+# bluetooth (BLE MIDI) is off unless set true on "felucca" (platform/bt.c, the own stack), on unless set false on "mvave"
 OPTIONS = {"usb_audio": "FOMA_USB_AUDIO", "trs_midi": "FOMA_TRS_MIDI", "midi_clock": "FOMA_MIDI_CLOCK", "bluetooth": "FOMA_BLUETOOTH"}
 # firmware.json "platform": what runs under your code on the FM-1
 #   felucca  Felucca's platform (the default): all source, Felucca's flash layout and updater, the USB rescue
@@ -116,8 +116,6 @@ def config():
     raise BuildError(f"firmware.json: unknown option {', '.join(bad)} (there are: {', '.join(OPTIONS)})")
   mv = c["platform"] == "mvave"
   c["user_bytes"] = mvpack.USER_SIZE  # M-VAVE's layout (the SDK's flash API takes no other)
-  if opts.get("bluetooth") and not mv:
-    raise BuildError('firmware.json: the "bluetooth" option needs "platform": "mvave"')
   on = {k: bool(opts.get(k, mv if k == "bluetooth" else True)) for k in OPTIONS}
   c["defines"] = [f"-D{OPTIONS[k]}={int(on[k])}" for k in OPTIONS] + [f"-DFOMA_MVAVE={int(mv)}"]
   return c
