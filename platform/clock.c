@@ -45,6 +45,7 @@ static void ck_add(uint32_t at, int what) {
     ck_n++;
   }
   if (ck_out) {
+    midi_frame(at);
     midi_send(ST[what], 0, 0);
   }
 }
