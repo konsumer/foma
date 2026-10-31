@@ -6,6 +6,7 @@ set IMAGE=konsumer/foma-toolchain
 if "%PORT%"=="" set PORT=8000
 set CMD=%1
 if "%CMD%"=="" set CMD=build
+if "%CMD%"=="flash" echo fm1 flash: macOS and Linux only for now. On Windows, install from the page: fm1 dev, then its Install tab & goto :eof
 docker image inspect %IMAGE% >nul 2>&1 || docker pull --platform linux/amd64 %IMAGE% || docker build --platform linux/amd64 -t %IMAGE% .
 if "%CMD%"=="image" docker build --platform linux/amd64 -t %IMAGE% . & goto :eof
 if "%CMD%"=="build" docker run --rm --init -it --platform linux/amd64 -v "%CD%:/work" %IMAGE% python3 tools/build.py & goto :eof

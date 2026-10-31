@@ -1,11 +1,12 @@
 #!/bin/sh
-# foma: everything runs in Docker, nothing else to install.
+# foma: everything runs in Docker, nothing else to install (flash runs on this computer: it needs USB).
 #   ./fm1 new NAME make this copy your own firmware (once): ./fm1 new "MY SYNTH" [--repo URL]
 #   ./fm1 dev      build, serve the emulator + installer on http://localhost:8000, rebuild on save
 #   ./fm1 build    build/web (the site) and build/NAME-VERSION.fwsc (the FM-1 package)
 #   ./fm1 fmt      format the code (clang-format, prettier, ruff)
 #   ./fm1 shell    a shell in the toolchain container
 #   ./fm1 image    build the toolchain image here (instead of pulling it)
+#   ./fm1 flash    install build/web/firmware.fwsc on the FM-1 over USB: ./fm1 flash [bt | FILE.fwsc | --id]
 #   ./fm1 clean    remove build/
 set -e
 cd "$(dirname "$0")"
@@ -37,6 +38,11 @@ case "${1:-build}" in
   fmt) run sh -c 'clang-format -i src/*.c platform/*.c platform/*.h && npx -y prettier -w "web/*.{html,js,css}" "*.json" && ruff format tools' ;;
   shell) run bash ;;
   image) image ;;
+  flash)
+    shift
+    command -v python3 >/dev/null || { echo "fm1: flash needs python3 on this computer"; exit 1; }
+    exec python3 tools/flash.py "$@"
+    ;;
   clean) rm -rf build ;;
-  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac
