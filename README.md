@@ -150,9 +150,15 @@ The FM-1 runs a JieLi AC791N. The emulator is forgiving, the chip is not; the bu
 | ------------- | ------------------------------------------------------------------------------------ |
 | `./fm1 dev`   | build, serve on http://localhost:8000 (`PORT=9000 ./fm1 dev`), rebuild on every save |
 | `./fm1 build` | `build/web/` (the site) and `build/NAME-VERSION.fwsc` (the package)                  |
+| `./fm1 flash` | install the build on the FM-1 over USB, as the page's Install does (below)           |
 | `./fm1 fmt`   | format: clang-format (C), prettier (web), ruff (python)                              |
 | `./fm1 shell` | a shell in the toolchain container                                                   |
 | `./fm1 image` | build the toolchain image from the `Dockerfile` here, instead of pulling it          |
+
+`./fm1 flash` runs on your computer, not in Docker (Docker on a Mac can't reach USB), and needs only `python3`
+(CoreMIDI on macOS, ALSA on Linux; not on Windows yet: use the page). `./fm1 flash` installs `build/web/firmware.fwsc`,
+`./fm1 flash FILE.fwsc` any package, `./fm1 flash --id` says what the FM-1 runs (`FM-1_000`: the USB rescue). Quit
+other apps that use the FM-1's MIDI port first. If an install is cut off, run it again: it finishes it.
 
 Windows: `fm1.cmd dev` (Docker Desktop). Without the script:
 `docker run --rm -it --platform linux/amd64 -p 8000:8000 -v "$PWD:/work" konsumer/foma-toolchain python3 tools/build.py --dev 8000`.
