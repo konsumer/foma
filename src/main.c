@@ -7,7 +7,7 @@
  *   USB-MIDI    notes in play too (and the TRS jack's)
  *   PLAY        starts / stops a 120 BPM MIDI clock, sent over USB-MIDI; its light blinks on the beat
  *   USB audio   a computer playing to the FM-1 comes out of it
- *   Bluetooth   ("platform": "mvave") BLE MIDI notes play too, and a phone playing to the FM-1 comes out of it
+ *   Bluetooth   (the bluetooth option) BLE MIDI notes play too (and on "mvave", a phone playing to the FM-1 comes out of it)
  *
  * What you can call: platform/fm1.h. The rules (no float, keep audio() short): README.md. */
 #include "fm1.h"

@@ -154,6 +154,23 @@ static RAMFN uint32_t fl_jedec_ram(void)                 /* expect 0x856014 */
     return id;
 }
 
+/* the part's factory unique ID (0x4B, four dummy bytes; the stock Puya P25Q80 gives 16 bytes, a Winbond-style part
+ * 8): dst (RAM) gets 16 bytes; the same on every read of the same part. Only with FL_UID defined: RAM code costs
+ * every firmware that includes this (from felucca-bsp chip/fm1_flash.h) */
+#ifdef FL_UID
+static RAMFN int fl_uid_ram(uint8_t *dst)
+{
+    fl_saved_t s; uint32_t i;
+    if (fl_enter(&s)) return -2;
+    fl_cs(0);
+    for (i = 0; i < 5u; i++) fl_tx(i ? 0 : 0x4B);
+    for (i = 0; i < 16u; i++) dst[i] = fl_rx();
+    fl_cs(1);
+    fl_exit(&s);
+    return 0;
+}
+#endif
+
 static RAMFN uint32_t fl_status_ram(void)                /* SR1 | SR2 << 8 */
 {
     fl_saved_t s; uint32_t v;
