@@ -87,6 +87,8 @@ static int st_read(uint32_t off, void *dst, uint32_t n) {
 
 static uint8_t recovery_active;
 #define OTA_IDENTITY (recovery_active ? "FM-1_000" : FELUCCA_ID)
+static void platform_frame(uint32_t cmd, const uint8_t *b, uint32_t n);
+#define OTA_MORE platform_frame
 #include "ota.c"
 static void recovery_poll(void);
 static uint32_t ota_now_ms(void) { return fm1_ms; }
@@ -134,6 +136,57 @@ static void ota_commit(const uint8_t *parm) {
 #if FOMA_BLUETOOTH
 #include "bt.c"
 #endif
+
+/* the host's other messages (./fm1 flash --crash, --radio, --bt). Each answer is 32 bytes.
+ * 0x12, the last crash (fm1_irq.h, from before this boot: read it from the USB rescue too), 8 little-endian words:
+ * magic ("CRSH" when there's a record), count, vec, pc, rets, emu, dbg (the exception's cause), the reset reason | the
+ * BLE start-up step << 8. 0x13, the BLE breadcrumb (fm1_ble_rf.h, 0s without Bluetooth): now, irqs, op, gop, addr,
+ * stop, the crash's uptime_ms, etm[0]. With Bluetooth: 0x14 [k], the radio records the last start used (bt.c
+ * bt_rf_kept) from k * 32; 0x15, the link (bt.c bt_report); 0x16 [i], device i of the scan; 0x19, our address */
+static void platform_frame(uint32_t cmd, const uint8_t *b, uint32_t n) {
+  if ((cmd == 0x12u || cmd == 0x13u) && !n) {
+    uint32_t w[8] = {0}, step = 0;
+    uint8_t o[32];
+#if FOMA_BLUETOOTH
+    uint8_t ble = fm1_ble_bc.now >> 24 == 0xB1u;
+    step = ble ? fm1_ble_bc.now >> 16 & 0xFFu : 0u;
+    if (cmd == 0x13u && ble) {
+      w[0] = fm1_ble_bc.now, w[1] = fm1_ble_bc.irqs, w[2] = fm1_ble_bc.op, w[3] = fm1_ble_bc.gop;
+      w[4] = fm1_ble_bc.addr, w[5] = fm1_ble_bc.stop;
+    }
+#endif
+    if (cmd == 0x12u) {
+      w[0] = fm1_crash.magic, w[1] = fm1_crash.count, w[2] = fm1_crash.vec, w[3] = fm1_crash.pc;
+      w[4] = fm1_crash.rets, w[5] = fm1_crash.emu, w[6] = fm1_crash.dbg, w[7] = fm1_boot.p3_rst | step << 8;
+    } else {
+      w[6] = fm1_crash.uptime_ms, w[7] = fm1_crash.etm[0];
+    }
+    for (uint32_t i = 0; i < 32u; i++) {
+      o[i] = (uint8_t)(w[i / 4u] >> (8u * (i & 3u)));
+    }
+    ota_send_msg(cmd, o, sizeof o);
+    return;
+  }
+#if FOMA_BLUETOOTH
+#if BLE_CENTRAL
+  if (((cmd == 0x15u || cmd == 0x19u) && !n) || (cmd == 0x16u && n == 1u)) {
+    uint8_t o[32];
+    bt_report(cmd, n ? b[0] : 0u, o);
+    ota_send_msg(cmd, o, sizeof o);
+    return;
+  }
+#endif
+  if (cmd == 0x14u && n == 1u && b[0] < 4u) { /* the radio records the last start used (bt.c bt_rf_kept): 32 bytes at b[0] * 32 */
+    uint8_t o[32];
+    for (uint32_t i = 0; i < 32u; i++) {
+      o[i] = ((const volatile uint8_t *)&bt_rf_kept)[b[0] * 32u + i];
+    }
+    ota_send_msg(cmd, o, sizeof o);
+    return;
+  }
+#endif
+  (void)b, (void)n;
+}
 
 /* ---- the screen, the sound helpers (shared with the emulator) */
 #include "common.c"

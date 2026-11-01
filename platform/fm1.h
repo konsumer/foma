@@ -169,11 +169,15 @@ typedef struct {
 } bt_status_t;
 int bt_enable(int features); /* BT_AUDIO | BT_MIDI, 0 off */
 void bt_status(bt_status_t *s);
-int ble_central(int on);                         /* 0: others connect to the FM-1; 1: it connects to a controller */
-int ble_scan(void);                              /* central: 15 s of looking for BLE MIDI devices */
-int ble_device(int i, char name[25], int *rssi); /* 0: device i of the scan */
+int ble_central(int on);                                           /* 0: others connect to the FM-1; 1: it connects to a controller */
+int ble_scan(void);                                                /* central: 15 s of looking for BLE MIDI devices */
+int ble_device(int i, char name[25], int *rssi);                   /* 0: device i of the scan */
+int ble_device_addr(int i, uint8_t addr[6], int *random);          /* 0: device i's address, least significant octet first
+                                                                    * ("mvave": -1, not known) */
+int ble_find(const uint8_t addr[6], int random, const char *name); /* the scan's index of that device (by address, else
+                                                                    * by name when name is not empty), -1: not seen */
 int ble_connect(int i);
-int ble_disconnect(void);
+int ble_disconnect(void);         /* leave the device we connected to (a computer connected to us stays) */
 int ble_forget(void);             /* forget the BLE pairings */
 const int32_t *bt_audio_in(void); /* in audio(): this block from Bluetooth (as audio_in), or 0 */
 #endif

@@ -250,6 +250,21 @@ int ble_device(int i, char name[25], int *rssi) {
   *rssi = r;
   return 0;
 }
+int ble_device_addr(int i, uint8_t addr[6], int *random) { return (void)i, (void)addr, (void)random, -1; }
+int ble_find(const uint8_t addr[6], int random, const char *name) { /* (by name only: the addresses aren't known here) */
+  char nm[25];
+  (void)addr, (void)random;
+  for (int i = 0; name && name[0] && ble_device(i, nm, 0) == 0; i++) {
+    int k = 0;
+    while (name[k] && nm[k] == name[k]) {
+      k++;
+    }
+    if (!name[k] && !nm[k]) {
+      return i;
+    }
+  }
+  return -1;
+}
 int ble_connect(int i) { return i < 0 ? -1 : mv_ble_connect((unsigned)i); }
 int ble_disconnect(void) { return mv_ble_disconnect(); }
 int ble_forget(void) { return mv_ble_forget(); }

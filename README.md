@@ -88,12 +88,18 @@ clock and start / stop through the clock helper (`clock_follow(MIDI_BLE)`), and 
 `bt_status()` says whether it's advertising, connected or ready for MIDI. Notes held when the link drops get their
 note-offs.
 
+It can also connect out, to a Bluetooth MIDI controller or another FM-1: `ble_scan()` looks for 15 s, `ble_device(i)`
+names the BLE MIDI devices found (with a rough signal), `ble_device_addr(i)` gives one's address (keep it to find the
+device again later with `ble_find()`), `ble_connect(i)` connects, `ble_disconnect()` leaves it (a computer connected
+to the FM-1 stays). A link not made in a few seconds is worth leaving and trying again. One link at a time, no
+pairing. A clock from Bluetooth is placed by its senders' time stamps, so it comes out as evenly as it was sent.
+
 On Felucca's platform it's Henri David's Bluetooth stack from [Optimist](https://github.com/w0ts/optimist) with the
 radio drivers of [felucca-bsp](https://github.com/hugelton/felucca-bsp) (`platform/ble`, `platform/hal/fm1_ble*.h`,
 `platform/bt.c`): written from the Bluetooth specifications and measurements of the FM-1's radio, no JieLi library.
-It calibrates the radio when it starts, so nothing stored on the FM-1 is needed. It's a peripheral only: no pairing
-(macOS and iOS connect without it), no connecting out to a controller (`ble_central` answers "not ready") and no
-audio. Tested on an FM-1 with a Mac, both ways.
+It starts the radio with the FM-1's own calibration, as the stock firmware left it in flash (the defaults when it's
+gone), and measures the radio's VCO bands at every start (with another unit's, reception went bad seconds after the
+start). No pairing (macOS and iOS connect without it) and no audio. Tested on FM-1s with a Mac and with each other.
 
 To connect from a Mac: Audio MIDI Setup, Window > Show MIDI Studio, the Bluetooth button, then Connect.
 
@@ -158,7 +164,10 @@ The FM-1 runs a JieLi AC791N. The emulator is forgiving, the chip is not; the bu
 `./fm1 flash` runs on your computer, not in Docker (Docker on a Mac can't reach USB), and needs only `python3`
 (CoreMIDI on macOS, ALSA on Linux; not on Windows yet: use the page). `./fm1 flash` installs `build/web/firmware.fwsc`,
 `./fm1 flash FILE.fwsc` any package, `./fm1 flash --id` says what the FM-1 runs (`FM-1_000`: the USB rescue). Quit
-other apps that use the FM-1's MIDI port first. If an install is cut off, run it again: it finishes it.
+other apps that use the FM-1's MIDI port first. If an install is cut off, run it again: it finishes it. With more than
+one FM-1 on USB, `./fm1 flash --list` numbers them and `--port N` first picks one (`./fm1 flash --port 2`).
+`./fm1 flash --crash` shows the last crash the FM-1 recorded (the USB rescue answers it too); with Bluetooth,
+`--bt` shows the link and what the last scan found, and `--radio` which radio calibration it started with.
 
 Windows: `fm1.cmd dev` (Docker Desktop). Without the script:
 `docker run --rm -it --platform linux/amd64 -p 8000:8000 -v "$PWD:/work" konsumer/foma-toolchain python3 tools/build.py --dev 8000`.

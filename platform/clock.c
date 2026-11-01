@@ -50,11 +50,14 @@ static void ck_add(uint32_t at, int what) {
   }
 }
 
-static void ck_tick(uint32_t at) { /* a followed tick: its length, smoothed (a pause is not one) */
+static void ck_tick(uint32_t at) { /* a followed tick: its length, smoothed over about a beat (a pause is not one) */
   uint32_t f = ck_frames + at, d = f - ck_last;
   ck_last = f;
   if (ck_on && d < 44100u && (!ck_q4 || d << 4 < ck_q4 * 3u)) {
-    ck_q4 = ck_q4 ? (uint32_t)((int32_t)ck_q4 + ((int32_t)(d << 4) - (int32_t)ck_q4) / 4) : d << 4;
+    ck_q4 = ck_q4 ? (uint32_t)((int32_t)ck_q4 + ((int32_t)(d << 4) - (int32_t)ck_q4) / 24) : d << 4; /* (a quarter
+                                                                                                      * each tick: a
+                                                                                                      * tempo that
+                                                                                                      * wobbled) */
   }
   ck_on = 1;
   ck_add(at, CLOCK_TICK);
@@ -75,6 +78,9 @@ static void clock_block(uint32_t n, uint32_t t) {
       RING_PUBLISH();
       uint32_t st = ck_q[r % CK_Q].st, src = ck_q[r % CK_Q].src;
       int32_t dt = (int32_t)(ck_q[r % CK_Q].t - ck_t);
+      if ((int32_t)(ck_q[r % CK_Q].t - t) > 0) {
+        break; /* (not due yet: Bluetooth's are timed a little ahead, bt.c) */
+      }
       uint32_t at = dt <= 0 ? 0 : (uint32_t)(((uint64_t)(uint32_t)dt * CLOCK_MUL) >> 32);
       r++;
       if (!(src & from)) {
