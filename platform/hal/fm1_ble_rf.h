@@ -204,7 +204,9 @@ static void fm1_rfspi(uint32_t addr, uint32_t cmd, uint32_t data)   /* HW §5.2:
  * table's banks (word 1, entries 0-127) and RX DC (word 0, 128-223) from what it measured. The x187 given to
  * fm1_ble_rf_run is ignored then. docs/bt/RF-CALIBRATION.md. */
 #include "fm1_rf_cal.h"
-static uint8_t fm1_rf_cal_on;                               /* set by the firmware: measure (1), or the stored 187 (0) */
+static uint8_t fm1_rf_cal_on;                               /* set by the firmware: measure (1), or the stored 187 (0),
+                                                             * or measure only the VCO bands (2: the scan, its band and
+                                                             * the RF-die words; the stored 187 for the rest) */
 static struct fm1_rf_cal fm1_rfc;                           /* what was measured (the log reads it) */
 static uint8_t fm1_rfc_x187[68];                            /* the record built from it */
 static uint8_t fm1_rfc_scanned, fm1_rfc_trimmed;
@@ -409,7 +411,7 @@ static void fm1_ble_rf_exec(uint32_t pc, uint32_t end, const uint8_t *const rec[
             fm1_ble_bc.addr = a;
             if (a == FM1_WL_A00)
                 v = (v & ~(1u << 14)) | (FM1_RF_REG(a) & 1u << 14);
-            if (fm1_rf_cal_on && fm1_rfc_is187(trim, nt)) {
+            if (fm1_rf_cal_on == 1u && fm1_rfc_is187(trim, nt)) {
                 fm1_rfc_before_187();
                 for (i = 0; i < nt; i++)
                     if ((ble_rf_fields[4u * trim[i]] & 3u) != 3u)
@@ -425,7 +427,7 @@ static void fm1_ble_rf_exec(uint32_t pc, uint32_t end, const uint8_t *const rec[
             pc += 5;
         } else if ((op & 0xFCu) == 0x80u) {                 /* a window write */
             v = rmw ? last : p[pc + 2];
-            if (fm1_rf_cal_on && fm1_rfc_is187(trim, nt)) {
+            if (fm1_rf_cal_on == 1u && fm1_rfc_is187(trim, nt)) {
                 fm1_rfc_before_187();
                 for (i = 0; i < nt; i++)
                     if ((ble_rf_fields[4u * trim[i]] & 3u) != 3u)

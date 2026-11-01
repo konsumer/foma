@@ -37,7 +37,8 @@ BLE_API void ble_hw_scan_start(const struct ble_hw_scan *s)
     CB->wincntl2 = HW_SCAN_WIN2;
     fm1_ble_col_wr(HW_LINK, 1, iv & 0xFFFFu);
     fm1_ble_col_wr(HW_LINK, 15, iv >> 16);                 /* bit15 = 0 for scanning (its meaning: C8) */
-    CB->filtercntl &= (uint16_t)~8u;                       /* 5: filter policy 0 (no whitelist) */
+    CB->filtercntl &= (uint16_t)~(8u | 0x10u | 1u);      /* 5: filter policy 0 (no whitelist; initiating's target
+                                                            * entry and its CONNECT_IND-only bit off too) */
     drv.scan_active = s->active ? 1u : 0u;
     CB->format = (uint16_t)(drv.scan_active ? 0u : 0x100u);   /* 6: bit8 0 = SCAN_REQ allowed */
     fm1_ble_col_wr(HW_LINK, 6, 0x2100u | 37u);             /* 7: channel 37 first */

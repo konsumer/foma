@@ -167,6 +167,10 @@ static void ota_service(void)
     uint32_t d = ota_take();
     if (d == 7u && ota_dec[2] == 0x11)
         ota_reply_identity();
+#ifdef OTA_MORE
+    else if (d)
+        OTA_MORE(ota_dec[2], ota_dec + 6, d - 7u);   /* the platform's other messages (fm1.c platform_frame) */
+#endif
 }
 
 /* one read request (3 tries x 5 s); data -> dst */
