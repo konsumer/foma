@@ -15,8 +15,9 @@ RUN mkdir -p /opt/jieli \
   && ln -s "$(ls -d /opt/jieli/jieli-linux-toolchains-* | sort | tail -1)" /opt/jieli/toolchain \
   && /opt/jieli/toolchain/pi32v2/bin/clang --version | head -1
 
-# JieLi's AC79 SDK (Apache-2.0, its LICENSE kept), pinned to AC79NN_SDK_V1.2.1_2023-12-13
-ARG AC79_SDK_URL=https://github.com/Jieli-Tech/fw-AC79_AIoT_SDK
+# JieLi's AC79 SDK (Apache-2.0, its LICENSE kept), pinned to AC79NN_SDK_V1.2.1_2023-12-13; JieLi took
+# their repo down, so it comes from a mirror (the commit pins the content)
+ARG AC79_SDK_URL=https://github.com/amitv87/fw-AC79_AIoT_SDK
 ARG AC79_SDK_REV=d179b4484759423312073f5fbb232501aa491047
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git \
