@@ -123,9 +123,6 @@ To connect from a Mac: Audio MIDI Setup, Window > Show MIDI Studio, the Bluetoot
     your code and data (the build says how much), and about 160 KiB of RAM (no `POOL`: it's all one RAM).
   - **Their layout and updater**: switching platform loses saved settings, the package identity is `FM-1_8` and six
     digits (from the version), and there's no OCT- rescue: M-VAVE's workbench and the chip's boot ROM still are.
-  - **Tested only in an emulator** so far ([fm1-emu](https://github.com/joakimeriksson/fm1-emu), with fixes for this
-    SDK): the screen, keys, knobs, audio and TRS MIDI work there. Bluetooth, USB audio, saved settings and installing
-    haven't been tried on an FM-1 yet.
   - **License**: `platform/mvave` is M-VAVE's: GPLv3 with their SDK linking exception, the library under their
     binary terms (FM-1 devices only). See `platform/mvave/LICENSE.md` and `THIRD_PARTY.md`.
 
