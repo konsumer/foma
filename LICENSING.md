@@ -8,6 +8,9 @@ GPL-3.0-only (`LICENSE`), as Felucca, SLOOP and Dinghy. Whoever gets a firmware 
 | `platform/fm1.c`                                                                                                                                                                                            | Dinghy's `platform.c` (zvenson), rewired to `fm1.h`                                                                                                                                                                                                                                                                                         |
 | `platform/fm1.h`, `platform/common.c`, `platform/clock.c`, `platform/web.c`, `web/` (the page, the emulator), `fm1`, `Dockerfile`, `src/main.c`                                                             | foma                                                                                                                                                                                                                                                                                                                                        |
 
+`bigscreen/` (Big Screen: `bigscreen.h`, its test and README) is MIT, so any firmware or viewer can take it in, whatever
+its own license: the notice is in `bigscreen.h`.
+
 The USB audio from a computer in `platform/src/usb.c` (`FOMA_USB_AUDIO`) is ported from
 [felucca-bsp](https://github.com/hugelton/felucca-bsp) (commit 5758857, MPL-2.0, by Leo Kuroshita), whose license lets
 it be used under GPL-3.0; foma's version uses integer math. The TRS MIDI input (`platform/src/midi_uart.c`,

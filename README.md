@@ -62,12 +62,12 @@ Name, version, package identity and build options: [firmware.json](firmware.json
 Some parts of the platform are optional. They're all on unless `"options"` in `firmware.json` turns them off, and
 turning one off takes its code and memory out of the firmware:
 
-| Option       | What it adds                                                                                                                                                                            | Costs      |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM |
-| `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB     |
-| `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM  |
-| `bluetooth`  | BLE MIDI in and out ([below](#bluetooth-midi)). Off unless turned on; on by default with `"platform": "mvave"`, which also has audio from a phone or computer.                           | 30 KiB code, 6 KiB RAM |
+| Option       | What it adds                                                                                                                                                                            | Costs                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `usb_audio`  | A computer or tablet can pick the FM-1 as a 44.1 kHz stereo output. `audio_in()` gives `audio()` that sound: play it, process it, record it.                                            | 10 KiB RAM             |
+| `trs_midi`   | MIDI in on the 3.5 mm TRS jack (a TRS-to-DIN adapter for most gear), through `midi_read()`, which says where each message came from.                                                    | <1 KiB                 |
+| `midi_clock` | One MIDI clock for `audio()`: its own tempo or the clock coming in, sent out over USB if you like. `clock_events()` gives each block's ticks, start and stop at the frame they fall on. | 1 KiB RAM              |
+| `bluetooth`  | BLE MIDI in and out ([below](#bluetooth-midi)). Off unless turned on; on by default with `"platform": "mvave"`, which also has audio from a phone or computer.                          | 30 KiB code, 6 KiB RAM |
 
 ```json
 { "name": "MY SYNTH", "version": "0.1", "identity": "FM-1_95", "options": { "usb_audio": false } }
@@ -76,6 +76,10 @@ turning one off takes its code and memory out of the firmware:
 In your code, `#if FOMA_USB_AUDIO` (and `FOMA_TRS_MIDI`, `FOMA_MIDI_CLOCK`, `FOMA_BLUETOOTH`) tells you what's in. The
 FM-1 has no MIDI out on the TRS jack, so that can't be an option. The emulator follows MIDI clock from Web MIDI; it
 has no USB audio input (`audio_in()` gives 0) and no Bluetooth (the calls answer "not ready").
+
+### Big Screen
+
+[bigscreen/](bigscreen/) shows the screen big on a computer, a phone or [fm1buddy](https://github.com/konsumer/fm1buddy), over USB MIDI: `bigscreen.h`, one C file with both ends of it (MIT), and its protocol. [FOMAJAM](https://github.com/konsumer/fomajam) uses it.
 
 ### Bluetooth MIDI
 
