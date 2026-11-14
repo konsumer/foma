@@ -228,3 +228,5 @@ web/                  the page: emulator, installer, rescue
 ## License
 
 GPL-3.0-only. Credits and third-party parts: [LICENSING.md](LICENSING.md).
+
+You can also try Foma in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
