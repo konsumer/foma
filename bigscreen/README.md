@@ -4,7 +4,7 @@ A small device's screen, shown big on something else (a computer, a phone, [fm1b
 
 [`bigscreen.h`](bigscreen.h) has both ends in one C file: the device side (it sends the screen) and the viewer side (it asks for the screen and draws it). It's C99, needs only `stdint.h`, uses no malloc and no libc, and the comment at its top shows how to use it. [`test.c`](test.c) tests it: `cc -O2 -o /tmp/bstest test.c && /tmp/bstest`.
 
-Version 2 is new. Version 1 is [pfkellogg's screen_mirror](https://github.com/pfkellogg/fm1_open), which [FM-1 Mirror](https://github.com/pfkellogg/fm1-mirror) speaks. A device using `bigscreen.h` speaks both, and a viewer using it asks for version 2 and falls back to version 1 by itself.
+Version 2 is new. Version 1 is [pfkellogg's screen_mirror](https://github.com/pfkellogg/fm1_open). [FM-1 Big Screen](https://github.com/pfkellogg/fm1-mirror) (formerly FM-1 Mirror) speaks both: it asks for version 2 first and falls back to version 1. A device using `bigscreen.h` speaks both, and a viewer using it asks for version 2 and falls back to version 1 by itself.
 
 ## Why version 2
 
@@ -110,3 +110,10 @@ switch (bs_view_sysex(&view, msg, len, &r)) {
 ```
 
 Call `bs_view_reset` when a device is plugged in. It then asks which version again.
+
+### Viewers in other languages
+
+Ports of the viewer side, each tested against `bigscreen.h`'s own device output (frames identical, pixel for pixel):
+
+- Rust: [`src/bigscreen2.rs`](https://github.com/pfkellogg/fm1-mirror/blob/master/src/bigscreen2.rs) in FM-1 Big Screen for Mac, Windows and Linux.
+- Java: [`BigScreen2.java`](https://github.com/pfkellogg/fm1-mirror-spyglass-android/blob/main/app/src/main/java/com/pfkellogg/fm1mirror/BigScreen2.java) in FM-1 Big Screen for Android (no Android classes in it).
